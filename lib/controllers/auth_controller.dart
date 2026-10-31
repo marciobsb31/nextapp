@@ -30,10 +30,10 @@ class GoogleProfileData {
 }
 
 class AuthController extends ChangeNotifier {
-  static const _avatarPadrao =
-      'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=300&auto=format&fit=crop&q=80';
+  /// Sem foto, a tela mostra as iniciais do nome (nada de foto de banco de imagens).
+  static const _avatarPadrao = '';
   bool _isAuthenticated = false;
-  String _userName = 'Márcio Silva';
+  String _userName = '';
   String _userEmail = 'marcio@email.com';
   String _avatarUrl = _avatarPadrao;
   Sessao? _sessaoAtual;
@@ -147,7 +147,25 @@ class AuthController extends ChangeNotifier {
   }
 
   bool get isAuthenticated => _isAuthenticated;
-  String get userName => _userName;
+  String get userName => _userName.isNotEmpty ? _userName : _nomeDoEmail(_userEmail);
+
+  bool get temFoto => _avatarUrl.isNotEmpty;
+
+  /// Até duas iniciais do nome, para o avatar sem foto.
+  String get iniciais {
+    // Só palavras que começam com letra: "(teste)" ou números não viram inicial.
+    final partes = userName.trim().split(RegExp(r'\s+')).where((p) => RegExp(r'^[A-Za-zÀ-ÿ]').hasMatch(p)).toList();
+    if (partes.isEmpty) return '?';
+    final primeira = partes.first.characters.first;
+    final ultima = partes.length > 1 ? partes.last.characters.first : '';
+    return (primeira + ultima).toUpperCase();
+  }
+
+  static String _nomeDoEmail(String email) {
+    final antes = email.split('@').first.replaceAll(RegExp(r'[._-]+'), ' ').trim();
+    if (antes.isEmpty) return 'Morador';
+    return antes.split(' ').where((p) => p.isNotEmpty).map((p) => p[0].toUpperCase() + p.substring(1)).join(' ');
+  }
   String get userEmail => _userEmail;
   String get avatarUrl => _avatarUrl;
   int get unreadNotifications => _unreadNotifications;
@@ -168,7 +186,15 @@ class AuthController extends ChangeNotifier {
   LojaUnidade get unidadeAtual => _unidadeAtual;
   Sessao? get sessaoAtual => _sessaoAtual;
   String get condoName => _unidadeAtual.nome;
-  String get unit => 'Apto $_apartamento • $_bloco';
+  /// Apartamento e bloco quando informados; senão o complemento do endereço. Vazio se não houver nada.
+  String get unit {
+    final partes = [
+      if (_apartamento.trim().isNotEmpty) 'Apto ${_apartamento.trim()}',
+      if (_bloco.trim().isNotEmpty) 'Bloco ${_bloco.trim()}',
+    ];
+    if (partes.isEmpty && _complemento.trim().isNotEmpty) partes.add(_complemento.trim());
+    return partes.join(' • ');
+  }
   int get registerStep => _registerStep;
   bool get isLoadingCatalogo => _isLoadingCatalogo;
 
@@ -349,11 +375,62 @@ class AuthController extends ChangeNotifier {
   bool isFavorito(String productId) => _favoritosIds.contains(productId);
 
   void toggleFavorito(String productId) {
-    if (_favoritosIds.contains(productId)) {
-      _favoritosIds.remove(productId);
-    } else {
+    final marcar = !_favoritosIds.contains(productId);
+    if (marcar) {
       _favoritosIds.add(productId);
+    } else {
+      _favoritosIds.remove(productId);
     }
+    notifyListeners();
+    _salvarFavorito(productId, marcar);
+  }
+
+  /// O coração fica salvo na conta do morador; se o servidor recusar, a tela volta como estava.
+  Future<void> _salvarFavorito(String productId, bool marcar) async {
+    final sessao = _sessaoAtual;
+    if (sessao == null || !sessao.autenticada || !sessao.cliente || int.tryParse(productId) == null) return;
+    try {
+      await _apiPdv.gestaoEnviar(sessao, marcar ? 'PUT' : 'DELETE', '/api/app/favoritos/$productId');
+    } catch (_) {
+      if (marcar) {
+        _favoritosIds.remove(productId);
+      } else {
+        _favoritosIds.add(productId);
+      }
+      notifyListeners();
+    }
+  }
+
+  /// Favoritos e produtos dos últimos pedidos, para o "Comprar de novo" do início.
+  Future<void> _carregarPreferencias(Sessao sessao) async {
+    if (!sessao.cliente) return;
+    try {
+      final favoritos = await _apiPdv.gestao(sessao, '/api/app/favoritos');
+      if (_sessaoAtual != sessao) return;
+      if (favoritos is List) {
+        _favoritosIds
+          ..clear()
+          ..addAll([for (final f in favoritos) if (f is Map && f['id'] != null) f['id'].toString()]);
+      }
+    } catch (_) {}
+    try {
+      final pagina = await _apiPdv.gestao(sessao, '/api/app/pedidos', consulta: {'situacao': 'CONCLUIDOS'});
+      final pedidos = pagina is Map && pagina['itens'] is List ? pagina['itens'] as List : const [];
+      final ids = <String>[];
+      for (final pedido in pedidos.take(3)) {
+        if (pedido is! Map) continue;
+        final detalhe = await _apiPdv.gestao(sessao, '/api/app/pedidos/${pedido['id']}');
+        final itens = detalhe is Map && detalhe['itens'] is List ? detalhe['itens'] as List : const [];
+        for (final item in itens) {
+          final id = item is Map ? item['produtoId']?.toString() : null;
+          if (id != null && !ids.contains(id)) ids.add(id);
+        }
+      }
+      if (_sessaoAtual != sessao) return;
+      _ultimasComprasIds
+        ..clear()
+        ..addAll(ids);
+    } catch (_) {}
     notifyListeners();
   }
 
@@ -382,8 +459,10 @@ class AuthController extends ChangeNotifier {
     if (sessao != null && sessao.fotoUrl.isNotEmpty) {
       _avatarUrl = _fotoAbsoluta(sessao.fotoUrl);
     }
-    if (email.contains('@')) {
-      _userName = email.split('@').first;
+    _userName = sessao != null && sessao.nome.trim().isNotEmpty ? sessao.nome.trim() : '';
+    if (sessao != null && sessao.autenticada) {
+      _carregarConta(sessao);
+      _carregarPreferencias(sessao);
     }
 
     if (birthDate != null) {
@@ -428,6 +507,32 @@ class AuthController extends ChangeNotifier {
   }
 
   /// Entra com uma sessão emitida pela API (senha, Google ou "Lembrar de mim").
+  /// Nome, foto e endereço de verdade, do cadastro do morador (`GET /api/app/eu`).
+  Future<void> _carregarConta(Sessao sessao) async {
+    try {
+      final conta = await _apiPdv.eu(sessao);
+      if (_sessaoAtual != sessao) return;
+      final nome = (conta['nome'] ?? '').toString().trim();
+      if (nome.isNotEmpty) _userName = nome;
+      final foto = (conta['fotoUrl'] ?? '').toString();
+      if (foto.isNotEmpty) _avatarUrl = _fotoAbsoluta(foto);
+      final endereco = conta['endereco'];
+      if (endereco is Map) {
+        String campo(String chave) => (endereco[chave] ?? '').toString().trim();
+        _cep = campo('cep');
+        _logradouro = campo('logradouro');
+        _numero = campo('numero');
+        _complemento = campo('complemento');
+        _bairro = campo('bairro');
+        _cidade = campo('cidade');
+        _uf = campo('uf');
+      }
+      notifyListeners();
+    } catch (_) {
+      // Sem a conta, o app segue com o que veio no login.
+    }
+  }
+
   void entrarComSessao(Sessao sessao) {
     login(email: sessao.email, password: '', sessao: sessao);
     carregarCatalogoCondominio();

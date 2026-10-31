@@ -12,6 +12,7 @@ import '../../core/sessao/sessao.dart';
 import '../../models/product.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/gradient_button.dart';
+import '../../core/util/dinheiro.dart';
 import '../payment/payment_flow.dart';
 
 /// Geladeira autônoma lida pelo QR: mostra os produtos da unidade dela, cobra
@@ -177,7 +178,7 @@ class _GeladeiraPageState extends State<GeladeiraPage> {
                                           crossAxisAlignment: CrossAxisAlignment.start,
                                           children: [
                                             Text(p.name, style: GoogleFonts.poppins(fontWeight: FontWeight.w600, fontSize: 13.5)),
-                                            Text('R\$ ${p.price.toStringAsFixed(2).replaceAll('.', ',')}',
+                                            Text(reaisBr(p.price),
                                                 style: GoogleFonts.poppins(color: AppColors.primaryOrange, fontWeight: FontWeight.w700)),
                                           ],
                                         ),
@@ -206,7 +207,7 @@ class _GeladeiraPageState extends State<GeladeiraPage> {
                         child: GradientButton(
                           text: _carrinho.items.isEmpty
                               ? 'Escolha os produtos'
-                              : 'Pagar • R\$ ${_carrinho.total.toStringAsFixed(2).replaceAll('.', ',')}',
+                              : 'Pagar • ${reaisBr(_carrinho.total)}',
                           icon: LucideIcons.creditCard,
                           onPressed: _carrinho.items.isEmpty ? null : _pagar,
                         ),

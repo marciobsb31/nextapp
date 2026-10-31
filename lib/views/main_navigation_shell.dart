@@ -96,7 +96,7 @@ class _MainNavigationShellState extends State<MainNavigationShell>
             onNavigateToCart: _navigateToCart,
           ),
           const SizedBox.shrink(), // Placeholder para o botão central Smart Access
-          const OrdersPage(),
+          OrdersPage(sessao: widget.authController.sessaoAtual),
           ProfilePage(
             authController: widget.authController,
             onLogout: widget.onLogout,

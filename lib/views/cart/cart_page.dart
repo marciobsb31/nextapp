@@ -7,7 +7,7 @@ import '../../models/cart_item.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/gradient_button.dart';
 import '../../widgets/product_image.dart';
-import '../../widgets/swipe_to_pay.dart';
+import '../../core/util/dinheiro.dart';
 import '../payment/payment_flow.dart';
 
 class CartPage extends StatelessWidget {
@@ -198,7 +198,7 @@ class CartPage extends StatelessWidget {
                             ),
                           ),
                           Text(
-                            'R\$ ${cartController.subtotal.toStringAsFixed(2)}',
+                            reaisBr(cartController.subtotal),
                             style: GoogleFonts.poppins(
                               fontSize: 15,
                               fontWeight: FontWeight.w600,
@@ -207,16 +207,15 @@ class CartPage extends StatelessWidget {
                           ),
                         ],
                       ),
-                      const SizedBox(height: 8),
-
-                      // Taxa de Condomínio / Serviço
-                      Row(
+                      // Taxa de serviço: só aparece quando existe.
+                      if (cartController.serviceFee > 0) const SizedBox(height: 8),
+                      if (cartController.serviceFee > 0) Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           Row(
                             children: [
                               Text(
-                                'Taxa Smart Market',
+                                'Taxa de serviço',
                                 style: GoogleFonts.poppins(
                                   fontSize: 14,
                                   color: isDark ? AppColors.textSecondaryDark : AppColors.textSecondary,
@@ -227,7 +226,7 @@ class CartPage extends StatelessWidget {
                             ],
                           ),
                           Text(
-                            'R\$ ${cartController.serviceFee.toStringAsFixed(2)}',
+                            reaisBr(cartController.serviceFee),
                             style: GoogleFonts.poppins(
                               fontSize: 15,
                               fontWeight: FontWeight.w600,
@@ -251,7 +250,7 @@ class CartPage extends StatelessWidget {
                             ),
                           ),
                           Text(
-                            'R\$ ${cartController.total.toStringAsFixed(2)}',
+                            reaisBr(cartController.total),
                             style: GoogleFonts.poppins(
                               fontSize: 22,
                               fontWeight: FontWeight.w900,
@@ -262,22 +261,11 @@ class CartPage extends StatelessWidget {
                       ),
                       const SizedBox(height: 20),
 
-                      // Swipe to Pay ou Botão CTA
-                      SwipeToPay(
-                        label: 'Deslize para Pagar',
-                        onSwipeCompleted: () => _proceedToCheckout(context),
-                      ),
-                      const SizedBox(height: 10),
-                      TextButton(
+                      // Um caminho só para pagar: a forma de pagamento é escolhida na próxima tela.
+                      GradientButton(
+                        text: 'Ir para o pagamento',
+                        icon: LucideIcons.arrowRight,
                         onPressed: () => _proceedToCheckout(context),
-                        child: Text(
-                          'Ou clique aqui para escolher forma de pagamento >>',
-                          style: GoogleFonts.poppins(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            color: AppColors.primaryOrange,
-                          ),
-                        ),
                       ),
                     ],
                   ),
@@ -328,7 +316,8 @@ class CartPage extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 2),
-                Text(
+                if (item.product.unit.trim().toLowerCase() != 'un')
+                  Text(
                   item.product.unit,
                   style: GoogleFonts.poppins(
                     fontSize: 11,
@@ -337,7 +326,7 @@ class CartPage extends StatelessWidget {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'R\$ ${item.totalPrice.toStringAsFixed(2)}',
+                  reaisBr(item.totalPrice),
                   style: GoogleFonts.poppins(
                     fontSize: 15,
                     fontWeight: FontWeight.w800,

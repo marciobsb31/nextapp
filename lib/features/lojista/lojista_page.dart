@@ -13,13 +13,14 @@ import '../admin/catalogo_admin.dart';
 import '../admin/clientes_avisos_page.dart';
 import '../admin/financeiro_page.dart';
 import '../admin/gestao_comum.dart';
+import '../admin/graficos.dart';
 import '../admin/nota_foto_page.dart';
 import '../admin/notificacoes_admin.dart';
 import '../admin/smart_access_admin_page.dart';
 import '../admin/usuarios_page.dart';
 import '../admin/vendas_admin_page.dart';
 import '../inicio/produto_resumo.dart';
-import 'cupons_page.dart';
+import 'cupons_page.dart' show CuponsPage;
 import 'fornecedores_page.dart';
 import 'pedidos_loja.dart';
 
@@ -42,6 +43,9 @@ class _LojistaPageState extends ConsumerState<LojistaPage> {
   int? _lojaEscolhida;
   var _todas = false;
   var _periodo = 1;
+
+  /// Período escolhido no calendário; quando existe, vale no lugar dos atalhos de dias.
+  DateTimeRange? _intervalo;
   var _aba = 0;
   var _carregando = true;
   String? _aviso;
@@ -74,6 +78,8 @@ class _LojistaPageState extends ConsumerState<LojistaPage> {
                 sessao,
                 unidadeId: todas ? null : unidade,
                 periodo: _periodo,
+                inicio: _intervalo == null ? null : dataIso(_intervalo!.start),
+                fim: _intervalo == null ? null : dataIso(_intervalo!.end),
                 todas: todas,
               );
         } catch (erro) {
@@ -163,7 +169,7 @@ class _LojistaPageState extends ConsumerState<LojistaPage> {
               const SizedBox(height: 14),
               _atalhos(),
               const SizedBox(height: 18),
-              _secao('Mais vendidos', _linhasVenda(painel['maisVendidos'])),
+              ..._graficos(painel),
               const SizedBox(height: 8),
               Text(
                 texto(painel['premissas']).isEmpty
@@ -182,15 +188,150 @@ class _LojistaPageState extends ConsumerState<LojistaPage> {
   bool get _unidadePronta => _todas || _lojaEscolhida != null;
 
   Widget _periodos() {
-    return Pilulas<int>(
-      valor: _periodo,
-      opcoes: const [(1, 'Hoje'), (7, '7 dias'), (30, '30 dias')],
-      aoEscolher: (dias) {
-        setState(() => _periodo = dias);
-        _carregar();
-      },
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Pilulas<int>(
+          valor: _intervalo == null ? _periodo : -1,
+          opcoes: const [(1, 'Hoje'), (7, '7d'), (15, '15d'), (30, '30d'), (90, '90d')],
+          aoEscolher: (dias) {
+            setState(() {
+              _periodo = dias;
+              _intervalo = null;
+            });
+            _carregar();
+          },
+        ),
+        const SizedBox(height: 8),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: TextButton.icon(
+            onPressed: _escolherDatas,
+            icon: Icon(Icons.date_range, size: 18, color: Cores.laranja),
+            label: Text(
+              _intervalo == null
+                  ? 'Escolher datas'
+                  : '${dataCurta(dataIso(_intervalo!.start))} a ${dataCurta(dataIso(_intervalo!.end))}',
+              style: TextStyle(color: Cores.laranja, fontWeight: FontWeight.w600),
+            ),
+          ),
+        ),
+      ],
     );
   }
+
+  Future<void> _escolherDatas() async {
+    final hoje = DateTime.now();
+    final escolhido = await showDateRangePicker(
+      context: context,
+      firstDate: DateTime(hoje.year - 1, hoje.month, hoje.day),
+      lastDate: hoje,
+      initialDateRange: _intervalo ?? DateTimeRange(start: hoje.subtract(Duration(days: _periodo - 1)), end: hoje),
+      helpText: 'Período do relatório',
+      saveText: 'Aplicar',
+    );
+    if (escolhido == null) return;
+    setState(() => _intervalo = escolhido);
+    _carregar();
+  }
+
+  int get _diasDoPeriodo => _intervalo == null ? _periodo : _intervalo!.end.difference(_intervalo!.start).inDays + 1;
+
+  /// Variação contra o período anterior de mesmo tamanho.
+  Widget _variacao(Map<String, dynamic> painel) {
+    final atual = double.tryParse('${painel['faturamento'] ?? 0}') ?? 0;
+    final anterior = painel['anterior'] is Map ? double.tryParse('${(painel['anterior'] as Map)['faturamento'] ?? 0}') ?? 0 : 0;
+    if (anterior <= 0) {
+      return Text(atual > 0 ? 'Sem vendas no período anterior' : 'Sem vendas no período',
+          style: TextStyle(color: Colors.white.withValues(alpha: 0.85), fontSize: 12));
+    }
+    final pct = (atual - anterior) * 100 / anterior;
+    final sobe = pct >= 0;
+    return Row(children: [
+      Icon(sobe ? Icons.trending_up : Icons.trending_down, color: Colors.white, size: 16),
+      const SizedBox(width: 4),
+      Text('${sobe ? '+' : ''}${pct.toStringAsFixed(0)}% contra o período anterior',
+          style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600)),
+    ]);
+  }
+
+  List<Widget> _graficos(Map<String, dynamic> painel) {
+    final porHora = _diasDoPeriodo == 1;
+    final valores = <double>[];
+    final rotulos = <String>[];
+    if (porHora) {
+      final horas = {for (final h in _mapas(painel['serieHora'])) (h['hora'] as num).toInt(): double.tryParse('${h['faturamento']}') ?? 0};
+      for (var h = 0; h < 24; h++) {
+        valores.add(horas[h] ?? 0);
+        rotulos.add('${h}h');
+      }
+    } else {
+      final dias = {for (final d in _mapas(painel['serie'])) texto(d['dia']): double.tryParse('${d['faturamento']}') ?? 0};
+      final inicio = DateTime.tryParse(texto(painel['inicio'])) ?? DateTime.now().subtract(Duration(days: _diasDoPeriodo - 1));
+      for (var i = 0; i < _diasDoPeriodo; i++) {
+        final dia = inicio.add(Duration(days: i));
+        valores.add(dias[dataIso(dia)] ?? 0);
+        rotulos.add('${dia.day.toString().padLeft(2, '0')}/${dia.month.toString().padLeft(2, '0')}');
+      }
+    }
+    final cores = coresDosGraficos();
+    final metodos = _mapas(painel['metodos']);
+    final mais = _mapas(painel['maisVendidos']).take(5).toList();
+    return [
+      _cartaoGrafico(porHora ? 'Vendas por hora' : 'Vendas por dia', GraficoBarras(valores: valores, rotulos: rotulos)),
+      if (metodos.isNotEmpty)
+        _cartaoGrafico(
+          'Formas de pagamento',
+          GraficoRosca(fatias: [
+            for (var i = 0; i < metodos.length; i++)
+              (
+                rotulo: _nomeMetodo(texto(metodos[i]['metodo'])),
+                valor: double.tryParse('${metodos[i]['faturamento']}') ?? 0,
+                cor: cores[i % cores.length],
+              ),
+          ]),
+        ),
+      _cartaoGrafico(
+        'Mais vendidos',
+        mais.isEmpty
+            ? const Text('Nada neste período.', style: TextStyle(color: Cores.tinta))
+            : BarrasHorizontais(itens: [
+                for (final item in mais)
+                  (
+                    rotulo: texto(item['nome']),
+                    valor: double.tryParse('${item['quantidade']}') ?? 0,
+                    detalhe: '${item['quantidade']} un · ${reais(item['faturamento'])}',
+                  ),
+              ]),
+      ),
+    ];
+  }
+
+  Widget _cartaoGrafico(String titulo, Widget grafico) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 14),
+      padding: const EdgeInsets.all(16),
+      decoration: cartaoApp(),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(titulo, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Cores.marinho)),
+          const SizedBox(height: 12),
+          grafico,
+        ],
+      ),
+    );
+  }
+
+  String _nomeMetodo(String metodo) => switch (metodo.toUpperCase()) {
+        'PIX' => 'Pix',
+        'CREDITO' || 'CREDIT_CARD' => 'Crédito',
+        'DEBITO' || 'DEBIT_CARD' => 'Débito',
+        'NA_LOJA' || 'MAQUININHA' => 'Maquininha',
+        'DINHEIRO' => 'Dinheiro',
+        '' => 'Outros',
+        _ => metodo,
+      };
 
   Widget _faixaFaturamento(Map<String, dynamic> painel) {
     return Container(
@@ -200,12 +341,14 @@ class _LojistaPageState extends ConsumerState<LojistaPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(_periodo == 1 ? 'Faturamento de hoje' : 'Faturamento do período',
+          Text(_intervalo == null && _periodo == 1 ? 'Faturamento de hoje' : 'Faturamento do período',
               style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w500)),
           const SizedBox(height: 6),
           Text(reais(painel['faturamento']), style: const TextStyle(color: Colors.white, fontSize: 32, fontWeight: FontWeight.w700)),
           const SizedBox(height: 2),
           Text('${painel['vendas'] ?? 0} vendas', style: TextStyle(color: Colors.white.withValues(alpha: 0.85))),
+          const SizedBox(height: 8),
+          _variacao(painel),
         ],
       ),
     );
@@ -237,13 +380,6 @@ class _LojistaPageState extends ConsumerState<LojistaPage> {
           ...linhas,
       ],
     );
-  }
-
-  List<Widget> _linhasVenda(Object? valor) {
-    return [
-      for (final item in _mapas(valor))
-        _linha(texto(item['nome']), '${item['quantidade']} un', reais(item['faturamento'])),
-    ];
   }
 
   Widget _linha(String titulo, String detalhe, String valor) {

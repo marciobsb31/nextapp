@@ -26,6 +26,10 @@ class AparenciaAoVivo {
 
   Future<void> iniciar(Sessao sessao) async {
     parar();
+    if (!TemaLoja.usarPaletaDaUnidade) {
+      _tema.restaurarPadrao();
+      return;
+    }
     _sessao = sessao;
     try {
       final eu = await _api.eu(sessao);

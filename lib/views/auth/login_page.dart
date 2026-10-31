@@ -299,14 +299,14 @@ class _LoginPageState extends State<LoginPage> {
                               margin: const EdgeInsets.only(bottom: 14),
                               padding: const EdgeInsets.all(12),
                               decoration: BoxDecoration(
-                                color: const Color(0xFFE8F5E9),
+                                color: const Color(0xFFFFF0E6),
                                 borderRadius: BorderRadius.circular(12),
                               ),
                               child: Row(
                                 children: [
                                   const Icon(
                                     LucideIcons.checkCircle2,
-                                    color: Color(0xFF2E7D32),
+                                    color: Color(0xFFEA580C),
                                     size: 18,
                                   ),
                                   const SizedBox(width: 8),
@@ -314,7 +314,7 @@ class _LoginPageState extends State<LoginPage> {
                                     child: Text(
                                       msgRetorno!,
                                       style: GoogleFonts.poppins(
-                                        color: const Color(0xFF1B5E20),
+                                        color: const Color(0xFFC2410C),
                                         fontSize: 12,
                                         fontWeight: FontWeight.w600,
                                       ),

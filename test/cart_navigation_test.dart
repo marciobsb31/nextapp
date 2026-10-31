@@ -10,7 +10,7 @@ import 'package:pdv_market/views/products/products_page.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  testWidgets('a ação Ver Sacola abre o destino do carrinho', (tester) async {
+  testWidgets('a barra Ver carrinho é o único atalho e abre o carrinho', (tester) async {
     GoogleFonts.config.allowRuntimeFetching = false;
     tester.view.physicalSize = const Size(900, 1600);
     tester.view.devicePixelRatio = 1;
@@ -41,15 +41,17 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
 
-    expect(find.byType(SnackBarAction), findsOneWidget);
-    await tester.tap(find.byType(SnackBarAction));
+    // Sem aviso com ação: só a barra "Ver carrinho".
+    expect(find.byType(SnackBarAction), findsNothing);
+    expect(find.text('Ver carrinho'), findsOneWidget);
+    await tester.tap(find.text('Ver carrinho'));
     await tester.pump();
 
     expect(abriuSacola, isTrue);
     expect(cartController.totalItemCount, 1);
   });
 
-  testWidgets('a vitrine tem três colunas e abre o detalhe do produto', (
+  testWidgets('a vitrine tem duas colunas e abre o detalhe do produto', (
     tester,
   ) async {
     GoogleFonts.config.allowRuntimeFetching = false;
@@ -84,14 +86,15 @@ void main() {
         find.byKey(ValueKey('product-card-${produto.id}')),
     ];
     final posicoes = [for (final card in cards) tester.getTopLeft(card).dy];
+    // Duas colunas: os dois primeiros lado a lado, o terceiro na linha de baixo.
     expect(posicoes[0], posicoes[1]);
-    expect(posicoes[1], posicoes[2]);
+    expect(posicoes[2], greaterThan(posicoes[1]));
 
     await tester.tap(cards.first);
     await tester.pumpAndSettle();
-    expect(find.text('Adicionar ao carrinho'), findsOneWidget);
+    expect(find.text('Adicionar'), findsOneWidget);
 
-    await tester.tap(find.text('Adicionar ao carrinho'));
+    await tester.tap(find.text('Adicionar'));
     await tester.pumpAndSettle();
     expect(cartController.totalItemCount, 1);
   });

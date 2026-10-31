@@ -59,6 +59,10 @@ class TemaLoja extends ChangeNotifier {
 
   static final instancia = TemaLoja._();
 
+  /// O app usa o laranja da casa em todas as telas. Com `true`, voltaria a seguir a paleta que
+  /// cada unidade escolhe no painel (Aplicativo > Cores), que hoje deixava telas verdes e laranjas misturadas.
+  static const usarPaletaDaUnidade = false;
+
   PaletaApp _paleta = PaletaApp.padrao;
 
   PaletaApp get paleta => _paleta;

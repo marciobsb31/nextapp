@@ -1,12 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
+import '../../core/rede/api.dart';
+import '../../core/sessao/sessao.dart';
+import '../../core/util/dinheiro.dart';
 import '../../theme/app_theme.dart';
 
+/// Histórico de compras do morador: pedidos do app e compras no totem, vindos de `GET /api/app/pedidos`.
 class OrdersPage extends StatefulWidget {
   final List<Map<String, dynamic>> orders;
+  final Sessao? sessao;
+  final ApiPdv? api;
 
-  const OrdersPage({super.key, this.orders = const []});
+  const OrdersPage({super.key, this.orders = const [], this.sessao, this.api});
 
   @override
   State<OrdersPage> createState() => _OrdersPageState();
@@ -17,87 +23,94 @@ class _OrdersPageState extends State<OrdersPage> {
   String _selectedPeriodo = 'Todos';
   String _searchQuery = '';
 
-  static final List<Map<String, dynamic>> _mockDefaultOrders = [
-    {
-      'id': '#NXT-9842',
-      'date': 'Hoje, 14:22',
-      'timestamp': DateTime.now().subtract(const Duration(hours: 1)),
-      'status': 'Concluído',
-      'paymentMethod': 'Mastercard Final 4021',
-      'store': 'Minimarket Autônomo',
-      'itemsList': [
-        {'name': 'Red Bull Energy Drink 250ml', 'qty': 2, 'price': 10.90},
-        {'name': 'Batata Pringles Original 114g', 'qty': 1, 'price': 13.00},
-      ],
-      'items': '2x Red Bull 250ml, 1x Pringles Original',
-      'total': 'R\$ 34,80',
-      'rawTotal': 34.80,
-    },
-    {
-      'id': '#NXT-9510',
-      'date': 'Ontem, 08:45',
-      'timestamp': DateTime.now().subtract(const Duration(days: 1)),
-      'status': 'Concluído',
-      'paymentMethod': 'Pix Instantâneo',
-      'store': 'Minimarket Autônomo',
-      'itemsList': [
-        {'name': 'Café Espresso Grãos Selecionados 250g', 'qty': 1, 'price': 16.50},
-        {'name': 'Pão de Queijo Tradicional', 'qty': 1, 'price': 10.00},
-      ],
-      'items': '1x Café Espresso 250g, 1x Pão de Queijo',
-      'total': 'R\$ 26,50',
-      'rawTotal': 26.50,
-    },
-    {
-      'id': '#NXT-9230',
-      'date': '24/10/2026, 21:10',
-      'timestamp': DateTime.now().subtract(const Duration(days: 5)),
-      'status': 'Concluído',
-      'paymentMethod': 'Mastercard Final 4021',
-      'store': 'Minimarket Autônomo',
-      'itemsList': [
-        {'name': 'Cerveja Corona Extra 330ml', 'qty': 4, 'price': 9.50},
-        {'name': 'Amendoim Japonês Crocante 150g', 'qty': 2, 'price': 4.90},
-      ],
-      'items': '4x Corona Extra 330ml, 2x Amendoim Crocante',
-      'total': 'R\$ 47,80',
-      'rawTotal': 47.80,
-    },
-    {
-      'id': '#NXT-8940',
-      'date': '18/10/2026, 12:05',
-      'timestamp': DateTime.now().subtract(const Duration(days: 11)),
-      'status': 'Concluído',
-      'paymentMethod': 'NextPay Saldo Digital',
-      'store': 'Minimarket Autônomo',
-      'itemsList': [
-        {'name': 'Água Mineral Crystal sem Gás 500ml', 'qty': 2, 'price': 3.50},
-        {'name': 'Chocolate Milka Caramelo 100g', 'qty': 1, 'price': 12.90},
-      ],
-      'items': '2x Água Crystal 500ml, 1x Chocolate Milka',
-      'total': 'R\$ 19,90',
-      'rawTotal': 19.90,
-    },
-    {
-      'id': '#NXT-8520',
-      'date': '05/10/2026, 19:30',
-      'timestamp': DateTime.now().subtract(const Duration(days: 24)),
-      'status': 'Concluído',
-      'paymentMethod': 'Visa Infinite Final 8834',
-      'store': 'Minimarket Autônomo',
-      'itemsList': [
-        {'name': 'Refrigerante Coca-Cola 350ml', 'qty': 2, 'price': 5.50},
-        {'name': 'Snack Doritos Queijo Nacho 84g', 'qty': 1, 'price': 9.90},
-      ],
-      'items': '2x Coca-Cola 350ml, 1x Doritos 84g',
-      'total': 'R\$ 20,90',
-      'rawTotal': 20.90,
-    },
-  ];
+  List<Map<String, dynamic>>? _pedidos;
+  bool _carregando = false;
+  String? _erro;
+
+  ApiPdv get _api => widget.api ?? ApiPdv.padrao();
+
+  @override
+  void initState() {
+    super.initState();
+    _carregar();
+  }
+
+  Future<void> _carregar() async {
+    final sessao = widget.sessao;
+    if (sessao == null || !sessao.autenticada) return;
+    setState(() {
+      _carregando = true;
+      _erro = null;
+    });
+    try {
+      final lista = <Map<String, dynamic>>[];
+      for (final situacao in const ['ANDAMENTO', 'CONCLUIDOS']) {
+        final pagina = await _api.gestao(sessao, '/api/app/pedidos', consulta: {'situacao': situacao});
+        final itens = pagina is Map ? pagina['itens'] : null;
+        if (itens is List) {
+          for (final item in itens) {
+            if (item is Map) lista.add(_doServidor(Map<String, dynamic>.from(item)));
+          }
+        }
+      }
+      lista.sort((a, b) => (b['timestamp'] as DateTime).compareTo(a['timestamp'] as DateTime));
+      if (mounted) setState(() => _pedidos = lista);
+    } catch (_) {
+      if (mounted) setState(() => _erro = 'Não foi possível carregar seus pedidos. Puxe para baixo para tentar de novo.');
+    } finally {
+      if (mounted) setState(() => _carregando = false);
+    }
+  }
+
+  /// Converte o resumo da API para o formato que a tela já usa.
+  Map<String, dynamic> _doServidor(Map<String, dynamic> p) {
+    final quando = DateTime.tryParse('${p['data'] ?? ''}') ?? DateTime.now();
+    final pagamento = '${p['statusPagamento'] ?? ''}'.toUpperCase();
+    final pedido = '${p['statusPedido'] ?? ''}'.toUpperCase();
+    final status = const ['NEGADO', 'EXPIRADO', 'CANCELADO', 'ESTORNADO'].contains(pagamento) || pedido == 'CANCELADO'
+        ? 'Cancelado'
+        : const ['RECEBIDO', 'EM_SEPARACAO', 'PRONTO'].contains(pedido)
+            ? (pagamento == 'PAGO' ? 'Em andamento' : 'Pendente')
+            : 'Concluído';
+    final total = num.tryParse('${p['total'] ?? 0}') ?? 0;
+    return {
+      'vendaId': p['id'],
+      'id': '${p['numero'] ?? '#${p['id']}'}',
+      'date': _dataCurta(quando),
+      'timestamp': quando,
+      'status': status,
+      'paymentMethod': _formaPagamento('${p['metodoPagamento'] ?? ''}'),
+      'store': p['origem'] == 'APP' ? 'Pedido pelo app' : 'Compra no totem',
+      'itemsList': const <Map<String, dynamic>>[],
+      'items': '${p['itensResumo'] ?? ''}',
+      'total': reaisBr(total),
+      'rawTotal': total.toDouble(),
+    };
+  }
+
+  static String _dataCurta(DateTime d) {
+    final hoje = DateTime.now();
+    String dois(int n) => n.toString().padLeft(2, '0');
+    final hora = '${dois(d.hour)}:${dois(d.minute)}';
+    final dia = DateTime(d.year, d.month, d.day);
+    final diferenca = DateTime(hoje.year, hoje.month, hoje.day).difference(dia).inDays;
+    if (diferenca == 0) return 'Hoje, $hora';
+    if (diferenca == 1) return 'Ontem, $hora';
+    return '${dois(d.day)}/${dois(d.month)}/${d.year}, $hora';
+  }
+
+  static String _formaPagamento(String metodo) => switch (metodo.toUpperCase()) {
+        'PIX' => 'Pix',
+        'CREDITO' || 'CREDIT_CARD' => 'Cartão de crédito',
+        'DEBITO' || 'DEBIT_CARD' => 'Cartão de débito',
+        'NA_LOJA' || 'MAQUININHA' => 'Na maquininha',
+        '' => 'Pagamento',
+        _ => metodo,
+      };
 
   List<Map<String, dynamic>> get _allOrders {
     if (widget.orders.isNotEmpty) return widget.orders;
-    return _mockDefaultOrders;
+    return _pedidos ?? const [];
   }
 
   List<Map<String, dynamic>> get _filteredOrders {
@@ -141,7 +154,28 @@ class _OrdersPageState extends State<OrdersPage> {
     }).toList();
   }
 
-  void _abrirDetalhesComprovante(Map<String, dynamic> order) {
+  Future<void> _abrirDetalhesComprovante(Map<String, dynamic> order) async {
+    final sessao = widget.sessao;
+    if (sessao != null && order['vendaId'] != null && (order['itemsList'] as List).isEmpty) {
+      try {
+        final detalhe = await _api.gestao(sessao, '/api/app/pedidos/${order['vendaId']}');
+        final itens = detalhe is Map ? detalhe['itens'] : null;
+        if (itens is List) {
+          order['itemsList'] = [
+            for (final item in itens)
+              if (item is Map)
+                {
+                  'name': '${item['nome'] ?? ''}',
+                  'qty': item['quantidade'] ?? 1,
+                  'price': num.tryParse('${item['subtotal'] ?? item['precoUnitario'] ?? 0}') ?? 0,
+                },
+          ];
+        }
+      } catch (_) {
+        // Sem os itens, o comprovante mostra o resumo.
+      }
+    }
+    if (!mounted) return;
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -261,7 +295,7 @@ class _OrdersPageState extends State<OrdersPage> {
                           ),
                         ),
                         Text(
-                          'R\$ ${(map['price'] as num).toStringAsFixed(2)}',
+                          reaisBr((map['price'] as num)),
                           style: GoogleFonts.poppins(
                             fontSize: 12.5,
                             fontWeight: FontWeight.w600,
@@ -413,7 +447,7 @@ class _OrdersPageState extends State<OrdersPage> {
                           style: GoogleFonts.poppins(fontSize: 11, color: Colors.white70),
                         ),
                         Text(
-                          'R\$ ${totalGastoMes.toStringAsFixed(2)}',
+                          reaisBr(totalGastoMes),
                           style: GoogleFonts.poppins(
                             fontSize: 18,
                             fontWeight: FontWeight.w900,
@@ -431,7 +465,7 @@ class _OrdersPageState extends State<OrdersPage> {
                           style: GoogleFonts.poppins(fontSize: 11, color: Colors.white70),
                         ),
                         Text(
-                          '${_allOrders.length} pedidos',
+                          _allOrders.length == 1 ? '1 pedido' : '${_allOrders.length} pedidos',
                           style: GoogleFonts.poppins(
                             fontSize: 18,
                             fontWeight: FontWeight.w800,
@@ -522,8 +556,18 @@ class _OrdersPageState extends State<OrdersPage> {
                               ),
                             ),
                             const SizedBox(height: 18),
+                            if (_carregando) ...[
+                              const CircularProgressIndicator(),
+                              const SizedBox(height: 18),
+                            ],
                             Text(
-                              'Nenhum pedido encontrado',
+                              _carregando
+                                  ? 'Carregando seus pedidos...'
+                                  : _erro != null
+                                      ? 'Sem conexão com a loja'
+                                      : (_pedidos?.isEmpty ?? true)
+                                          ? 'Você ainda não fez nenhum pedido'
+                                          : 'Nenhum pedido encontrado',
                               style: GoogleFonts.poppins(
                                 fontSize: 16,
                                 fontWeight: FontWeight.w700,
@@ -532,7 +576,10 @@ class _OrdersPageState extends State<OrdersPage> {
                             ),
                             const SizedBox(height: 6),
                             Text(
-                              'Tente alterar os filtros ou o termo de busca.',
+                              _erro ??
+                                  ((_pedidos?.isEmpty ?? true)
+                                      ? 'Suas compras pelo app e no totem aparecem aqui.'
+                                      : 'Tente alterar os filtros ou o termo de busca.'),
                               textAlign: TextAlign.center,
                               style: GoogleFonts.poppins(
                                 fontSize: 12.5,
@@ -543,9 +590,11 @@ class _OrdersPageState extends State<OrdersPage> {
                         ),
                       ),
                     )
-                  : ListView.separated(
+                  : RefreshIndicator(
+                      onRefresh: _carregar,
+                      child: ListView.separated(
                       padding: const EdgeInsets.fromLTRB(20, 8, 20, 90),
-                      physics: const BouncingScrollPhysics(),
+                      physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
                       itemCount: ordersList.length,
                       separatorBuilder: (_, __) => const SizedBox(height: 14),
                       itemBuilder: (context, index) {
@@ -674,6 +723,7 @@ class _OrdersPageState extends State<OrdersPage> {
                           ),
                         );
                       },
+                    ),
                     ),
             ),
           ],

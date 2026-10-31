@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -105,6 +106,10 @@ class _NextPdvAppState extends State<NextPdvApp> {
       builder: (context, _) {
         return MaterialApp(
           navigatorKey: _navegador,
+          // Calendários, seletores e textos do sistema em português.
+          locale: const Locale('pt', 'BR'),
+          supportedLocales: const [Locale('pt', 'BR')],
+          localizationsDelegates: GlobalMaterialLocalizations.delegates,
           title: 'Next PDV - Mercado Autônomo & Smart Access',
           debugShowCheckedModeBanner: false,
           theme: AppTheme.lightTheme,

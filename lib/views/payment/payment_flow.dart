@@ -12,6 +12,7 @@ import '../../theme/app_theme.dart';
 import '../../widgets/confetti_overlay.dart';
 import '../../widgets/gradient_button.dart';
 import '../../widgets/radar_scan_animation.dart';
+import '../../core/util/dinheiro.dart';
 
 /// Pagamento do pedido pelo PagBank da loja: PIX, crédito, débito ou na
 /// maquininha (Moderninha) ao retirar. Sem internet, só a maquininha segue:
@@ -90,7 +91,7 @@ class _PaymentFlowState extends State<PaymentFlow> {
     );
   }
 
-  String _reais(double valor) => 'R\$ ${valor.toStringAsFixed(2).replaceAll('.', ',')}';
+  String _reais(double valor) => reaisBr(valor);
 
   @override
   Widget build(BuildContext context) {

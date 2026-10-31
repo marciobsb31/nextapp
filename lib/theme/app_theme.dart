@@ -13,7 +13,8 @@ class AppColors {
   static const Color cardSurface = Color(0xFFFFFFFF);
   static const Color textPrimary = Color(0xFF0F172A);
   static const Color textSecondary = Color(0xFF64748B);
-  static const Color successGreen = Color(0xFF10B981);
+  // Confirmações (pago, concluído, em estoque) também no laranja da casa: o app não usa verde.
+  static const Color successGreen = Color(0xFFEA580C);
   static const Color accentBorder = Color(0xFFE2E8F0);
 
   // Cores do Tema Escuro

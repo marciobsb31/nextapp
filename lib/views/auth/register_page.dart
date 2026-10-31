@@ -1153,10 +1153,10 @@ class _RegisterPageState extends State<RegisterPage> {
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                           decoration: BoxDecoration(
-                            color: const Color(0xFFE8F5E9),
+                            color: const Color(0xFFFFF0E6),
                             borderRadius: BorderRadius.circular(8),
                             border: Border.all(
-                              color: const Color(0xFF4CAF50),
+                              color: const Color(0xFFF97316),
                               width: 0.8,
                             ),
                           ),
@@ -1165,7 +1165,7 @@ class _RegisterPageState extends State<RegisterPage> {
                             style: GoogleFonts.poppins(
                               fontSize: 10,
                               fontWeight: FontWeight.w700,
-                              color: const Color(0xFF2E7D32),
+                              color: const Color(0xFFEA580C),
                             ),
                           ),
                         ),

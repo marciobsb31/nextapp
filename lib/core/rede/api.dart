@@ -158,12 +158,16 @@ class ApiPdv {
     int? unidadeId,
     int periodo = 1,
     bool todas = false,
+    String? inicio,
+    String? fim,
   }) async {
     final resposta = await _enviar(
       () => _dio.get<Map<String, dynamic>>(
         '/api/app/admin/dashboard',
         queryParameters: {
-          'periodo': periodo,
+          if (inicio == null) 'periodo': periodo,
+          'inicio': ?inicio,
+          'fim': ?fim,
           'lojaId': ?unidadeId,
           if (todas) 'todas': true,
         },

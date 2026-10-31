@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
@@ -7,7 +8,9 @@ import '../../controllers/cart_controller.dart';
 import '../../models/product.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/next_pdv_logo.dart';
+import '../../widgets/barra_carrinho.dart';
 import '../../widgets/product_image.dart';
+import '../../core/util/dinheiro.dart';
 import '../../widgets/product_detail_sheet.dart';
 
 class ProductsPage extends StatefulWidget {
@@ -32,63 +35,8 @@ class _ProductsPageState extends State<ProductsPage> {
 
   void _adicionarComAnimacao(Product product) {
     widget.cartController.addProduct(product);
-
-    ScaffoldMessenger.of(context).hideCurrentSnackBar();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        duration: const Duration(milliseconds: 2200),
-        behavior: SnackBarBehavior.floating,
-        backgroundColor: AppColors.navyDark,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        content: Row(
-          children: [
-            ClipRRect(
-              borderRadius: BorderRadius.circular(8),
-              child: ProductImage(
-                imageUrl: product.imageUrl,
-                width: 32,
-                height: 32,
-                iconSize: 16,
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    '${product.name} adicionado!',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: GoogleFonts.poppins(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w700,
-                      fontSize: 12,
-                    ),
-                  ),
-                  Text(
-                    'R\$ ${product.price.toStringAsFixed(2)}',
-                    style: GoogleFonts.poppins(
-                      color: AppColors.primaryOrange,
-                      fontSize: 10,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-        action: widget.onNavigateToCart == null
-            ? null
-            : SnackBarAction(
-                label: 'VER SACOLA',
-                textColor: AppColors.primaryOrangeLight,
-                onPressed: widget.onNavigateToCart!,
-              ),
-      ),
-    );
+    // A barra "Ver carrinho" já mostra a quantidade e o total; um toque leve confirma.
+    HapticFeedback.lightImpact();
   }
 
   void _abrirDetalheProduto(Product product) {
@@ -112,7 +60,6 @@ class _ProductsPageState extends State<ProductsPage> {
         final lojaAtual = widget.authController.unidadeAtual;
         final isMaior18 = widget.authController.isMaior18;
         final cartCount = widget.cartController.totalItemCount;
-        final cartTotal = widget.cartController.total;
 
         // Categorias do condomínio ativo respeitando idade (+18) e isolamento
         final categoriasDisponiveis =
@@ -397,8 +344,8 @@ class _ProductsPageState extends State<ProductsPage> {
                               physics: const BouncingScrollPhysics(),
                               gridDelegate:
                                   const SliverGridDelegateWithFixedCrossAxisCount(
-                                    crossAxisCount: 3,
-                                    childAspectRatio: 0.48,
+                                    crossAxisCount: 2,
+                                    childAspectRatio: 0.68,
                                     crossAxisSpacing: 16,
                                     mainAxisSpacing: 16,
                                   ),
@@ -423,102 +370,7 @@ class _ProductsPageState extends State<ProductsPage> {
                     left: 20,
                     right: 20,
                     bottom: 16,
-                    child: GestureDetector(
-                      onTap: widget.onNavigateToCart,
-                      child: Container(
-                        height: 56,
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        decoration: BoxDecoration(
-                          gradient: const LinearGradient(
-                            colors: [Color(0xFF0F172A), Color(0xFF1E293B)],
-                            begin: Alignment.centerLeft,
-                            end: Alignment.centerRight,
-                          ),
-                          borderRadius: BorderRadius.circular(20),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.3),
-                              blurRadius: 16,
-                              offset: const Offset(0, 6),
-                            ),
-                          ],
-                        ),
-                        child: Row(
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.all(7),
-                              decoration: BoxDecoration(
-                                color: AppColors.primaryOrange,
-                                shape: BoxShape.circle,
-                              ),
-                              child: const Icon(
-                                LucideIcons.shoppingBag,
-                                color: Colors.white,
-                                size: 16,
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    '$cartCount ${cartCount == 1 ? 'item adicionado' : 'itens no carrinho'}',
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: GoogleFonts.poppins(
-                                      color: Colors.white,
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w700,
-                                    ),
-                                  ),
-                                  Text(
-                                    'Total: R\$ ${cartTotal.toStringAsFixed(2)}',
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: GoogleFonts.poppins(
-                                      color: AppColors.primaryOrangeLight,
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 12,
-                                vertical: 7,
-                              ),
-                              decoration: BoxDecoration(
-                                gradient: AppColors.orangeGradient,
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Text(
-                                    'Ver Sacola',
-                                    style: GoogleFonts.poppins(
-                                      color: Colors.white,
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w800,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 4),
-                                  const Icon(
-                                    LucideIcons.arrowRight,
-                                    color: Colors.white,
-                                    size: 14,
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
+                    child: BarraCarrinho(cartController: widget.cartController, aoAbrir: widget.onNavigateToCart),
                   ),
               ],
             ),
@@ -557,7 +409,7 @@ class _ProductsPageState extends State<ProductsPage> {
                     ),
                     child: ProductImage(
                       imageUrl: product.imageUrl,
-                      height: 96,
+                      height: 128,
                       width: double.infinity,
                       iconSize: 36,
                     ),
@@ -634,7 +486,8 @@ class _ProductsPageState extends State<ProductsPage> {
                       ),
                     ),
                     const SizedBox(height: 2),
-                    Text(
+                    if (product.unit.trim().toLowerCase() != 'un')
+                      Text(
                       product.unit,
                       style: GoogleFonts.poppins(
                         fontSize: 10,
@@ -649,7 +502,7 @@ class _ProductsPageState extends State<ProductsPage> {
                       children: [
                         Expanded(
                           child: Text(
-                            'R\$ ${product.price.toStringAsFixed(2)}',
+                            reaisBr(product.price),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: GoogleFonts.poppins(

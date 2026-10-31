@@ -198,7 +198,7 @@ void main() {
 
         // Verifica identificação da loja e raio ativo
         expect(find.text('Residencial West Side'), findsOneWidget);
-        expect(find.text('Sua Unidade'), findsOneWidget);
+        expect(find.text('Sua unidade'), findsOneWidget);
 
         // Teste na Products Page (Gôndolas & Geladeiras com catálogo isolado)
         await tester.pumpWidget(
@@ -755,12 +755,11 @@ void main() {
       (tester) async {
         GoogleFonts.config.allowRuntimeFetching = false;
         final authController = AuthController();
-        const initialAvatar =
-            'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=300&auto=format&fit=crop&q=80';
         const newAvatar =
             'https://images.unsplash.com/photo-1570295999919-56ceb5ecca61?w=300&auto=format&fit=crop&q=80';
 
-        expect(authController.avatarUrl, equals(initialAvatar));
+        // Sem foto, o avatar mostra as iniciais (nada de foto de banco de imagens).
+        expect(authController.temFoto, isFalse);
 
         // Atualiza diretamente via AuthController
         authController.setAvatarUrl(newAvatar);
@@ -773,17 +772,16 @@ void main() {
         );
         await tester.pump();
 
-        // Botão 'Trocar Foto do App' está visível
-        expect(find.text('Trocar Foto do App'), findsOneWidget);
-
-        // Abre o modal de troca de foto
-        await tester.tap(find.text('Trocar Foto do App'));
+        expect(find.text('Trocar foto'), findsOneWidget);
+        await tester.ensureVisible(find.text('Trocar foto'));
+        await tester.tap(find.text('Trocar foto'));
         await tester.pump(const Duration(milliseconds: 500));
 
-        // Verifica elementos do modal
-        expect(find.text('Trocar Foto do Perfil'), findsOneWidget);
-        expect(find.text('Escolha uma foto da galeria'), findsOneWidget);
-        expect(find.text('Salvar Foto'), findsOneWidget);
+        // Modal com galeria, câmera e o botão de salvar (desligado até escolher a foto)
+        expect(find.text('Enviar nova foto'), findsOneWidget);
+        expect(find.text('Galeria'), findsOneWidget);
+        expect(find.text('Tirar foto'), findsOneWidget);
+        expect(find.text('Salvar foto'), findsOneWidget);
       },
     );
 

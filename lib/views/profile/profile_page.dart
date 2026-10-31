@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'dart:convert';
 
 import 'dart:typed_data';
@@ -5,6 +6,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../../controllers/auth_controller.dart';
@@ -13,6 +15,7 @@ import '../../theme/app_theme.dart';
 import '../../widgets/animated_bell_notification.dart';
 import '../../widgets/product_image.dart';
 import '../support/help_support_page.dart';
+import '../../widgets/avatar_iniciais.dart';
 
 class ProfilePage extends StatefulWidget {
   final AuthController authController;
@@ -30,6 +33,7 @@ class ProfilePage extends StatefulWidget {
 
 class _ProfilePageState extends State<ProfilePage> {
   Widget _buildAvatarImage(String url, {double size = 90}) {
+    if (url.isEmpty) return AvatarIniciais(iniciais: widget.authController.iniciais, tamanho: size);
     if (url.startsWith('data:image')) {
       try {
         final base64Data = url.split(',').last;
@@ -54,9 +58,48 @@ class _ProfilePageState extends State<ProfilePage> {
     );
   }
 
+  /// Galeria ou câmera. O tipo da foto vem do conteúdo, não do nome: a galeria do Android
+  /// entrega nomes como "scaled_123.heic" já convertidos para JPEG.
+  Future<({XFile? arquivo, Uint8List? bytes, String nome, String? erro})> _escolherFoto(ImageSource origem) async {
+    const nada = (arquivo: null, bytes: null, nome: '', erro: null);
+    if (origem == ImageSource.camera) {
+      final permissao = await Permission.camera.request();
+      if (!permissao.isGranted) {
+        return (arquivo: null, bytes: null, nome: '', erro: 'Libere a câmera para o app nas configurações do celular.');
+      }
+    }
+    final XFile? arquivo;
+    try {
+      arquivo = await ImagePicker().pickImage(source: origem, maxWidth: 1200, imageQuality: 85);
+    } catch (_) {
+      return (arquivo: null, bytes: null, nome: '', erro: 'Não foi possível abrir a ${origem == ImageSource.camera ? 'câmera' : 'galeria'}.');
+    }
+    if (arquivo == null) return nada;
+    final bytes = await arquivo.readAsBytes();
+    if (bytes.length > 5 * 1024 * 1024) {
+      return (arquivo: null, bytes: null, nome: '', erro: 'A foto pode ter até 5 MB.');
+    }
+    final tipo = _tipoDaImagem(bytes);
+    if (tipo == null) {
+      return (arquivo: null, bytes: null, nome: '', erro: 'Use uma foto JPG, PNG ou WEBP.');
+    }
+    return (arquivo: arquivo, bytes: bytes, nome: 'foto.$tipo', erro: null);
+  }
+
+  static String? _tipoDaImagem(Uint8List b) {
+    if (b.length < 12) return null;
+    if (b[0] == 0xFF && b[1] == 0xD8 && b[2] == 0xFF) return 'jpg';
+    if (b[0] == 0x89 && b[1] == 0x50 && b[2] == 0x4E && b[3] == 0x47) return 'png';
+    if (b[0] == 0x52 && b[1] == 0x49 && b[2] == 0x46 && b[3] == 0x46 && b[8] == 0x57 && b[9] == 0x45 && b[10] == 0x42 && b[11] == 0x50) {
+      return 'webp';
+    }
+    return null;
+  }
+
   void _abrirModalTrocaFoto() {
     XFile? arquivoSelecionado;
     Uint8List? bytesSelecionados;
+    String nomeSelecionado = 'foto.jpg';
     String? mensagemErro;
     var enviando = false;
 
@@ -156,48 +199,37 @@ class _ProfilePageState extends State<ProfilePage> {
                       ),
                     ],
                     const SizedBox(height: 18),
-                    SizedBox(
-                      width: double.infinity,
-                      height: 50,
-                      child: OutlinedButton.icon(
-                        onPressed: enviando
-                            ? null
-                            : () async {
-                                final arquivo = await ImagePicker().pickImage(
-                                  source: ImageSource.gallery,
-                                  maxWidth: 1200,
-                                  imageQuality: 85,
-                                );
-                                if (arquivo == null || !ctx.mounted) return;
-                                final extensao = arquivo.name
-                                    .split('.')
-                                    .last
-                                    .toLowerCase();
-                                if (!{'jpg', 'jpeg', 'png'}.contains(extensao)) {
-                                  setModalState(() {
-                                    mensagemErro =
-                                        'Selecione uma imagem JPG ou PNG.';
-                                  });
-                                  return;
-                                }
-                                final bytes = await arquivo.readAsBytes();
-                                if (!ctx.mounted) return;
-                                if (bytes.length > 5 * 1024 * 1024) {
-                                  setModalState(() {
-                                    mensagemErro =
-                                        'A foto pode ter até 5 MB.';
-                                  });
-                                  return;
-                                }
-                                setModalState(() {
-                                  arquivoSelecionado = arquivo;
-                                  bytesSelecionados = bytes;
-                                  mensagemErro = null;
-                                });
-                              },
-                        icon: const Icon(LucideIcons.image),
-                        label: const Text('Escolher foto'),
-                      ),
+                    Row(
+                      children: [
+                        for (final origem in [ImageSource.gallery, if (!kIsWeb) ImageSource.camera]) ...[
+                          if (origem == ImageSource.camera) const SizedBox(width: 10),
+                          Expanded(
+                            child: SizedBox(
+                              height: 50,
+                              child: OutlinedButton.icon(
+                                onPressed: enviando
+                                    ? null
+                                    : () async {
+                                        final escolhida = await _escolherFoto(origem);
+                                        if (!ctx.mounted) return;
+                                        setModalState(() {
+                                          if (escolhida.erro != null) {
+                                            mensagemErro = escolhida.erro;
+                                          } else if (escolhida.bytes != null) {
+                                            arquivoSelecionado = escolhida.arquivo;
+                                            bytesSelecionados = escolhida.bytes;
+                                            nomeSelecionado = escolhida.nome;
+                                            mensagemErro = null;
+                                          }
+                                        });
+                                      },
+                                icon: Icon(origem == ImageSource.camera ? LucideIcons.camera : LucideIcons.image),
+                                label: Text(origem == ImageSource.camera ? 'Tirar foto' : 'Galeria'),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
                     ),
                     const SizedBox(height: 10),
                     SizedBox(
@@ -216,7 +248,6 @@ class _ProfilePageState extends State<ProfilePage> {
                                 bytesSelecionados == null
                             ? null
                             : () async {
-                                final arquivo = arquivoSelecionado!;
                                 final bytes = bytesSelecionados!;
                                 setModalState(() {
                                   enviando = true;
@@ -225,7 +256,7 @@ class _ProfilePageState extends State<ProfilePage> {
                                 try {
                                   await widget.authController.enviarFotoPerfil(
                                     bytes: bytes,
-                                    nomeArquivo: arquivo.name,
+                                    nomeArquivo: nomeSelecionado,
                                   );
                                   if (!ctx.mounted) return;
                                   Navigator.of(ctx).pop();
@@ -235,7 +266,7 @@ class _ProfilePageState extends State<ProfilePage> {
                                       content: Text(
                                         'Foto do perfil atualizada.',
                                       ),
-                                      backgroundColor: Color(0xFF2E7D32),
+                                      backgroundColor: Color(0xFFEA580C),
                                       behavior: SnackBarBehavior.floating,
                                     ),
                                   );
@@ -285,7 +316,7 @@ class _ProfilePageState extends State<ProfilePage> {
         backgroundColor: Colors.transparent,
         elevation: 0,
         title: Text(
-          'Meu Perfil & Condomínio',
+          'Meu perfil',
           style: GoogleFonts.poppins(
             color: isDark ? Colors.white : AppColors.navyDark,
             fontWeight: FontWeight.w800,
@@ -380,7 +411,7 @@ class _ProfilePageState extends State<ProfilePage> {
                         color: AppColors.primaryOrange,
                       ),
                       label: Text(
-                        'Trocar Foto do App',
+                        'Trocar foto',
                         style: GoogleFonts.poppins(
                           fontSize: 12,
                           fontWeight: FontWeight.w700,
@@ -429,7 +460,7 @@ class _ProfilePageState extends State<ProfilePage> {
                               ),
                               const SizedBox(width: 8),
                               Text(
-                                '${widget.authController.condoName} • ${widget.authController.unit}',
+                                [widget.authController.condoName, widget.authController.unit].where((t) => t.trim().isNotEmpty).join(' • '),
                                 style: GoogleFonts.poppins(
                                   fontSize: 12,
                                   fontWeight: FontWeight.w700,
@@ -440,13 +471,13 @@ class _ProfilePageState extends State<ProfilePage> {
                               ),
                             ],
                           ),
-                          const SizedBox(height: 4),
-                          Text(
-                            'CEP: ${widget.authController.cep} • Raio: ${widget.authController.unidadeAtual.distanciaFormatada} (Autorizado)',
+                          if (widget.authController.cep.isNotEmpty) const SizedBox(height: 4),
+                          if (widget.authController.cep.isNotEmpty) Text(
+                            'CEP ${widget.authController.cep}',
                             style: GoogleFonts.poppins(
                               fontSize: 11,
                               fontWeight: FontWeight.w600,
-                              color: const Color(0xFF2E7D32),
+                              color: const Color(0xFFEA580C),
                             ),
                           ),
                         ],

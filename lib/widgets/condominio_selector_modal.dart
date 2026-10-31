@@ -109,7 +109,7 @@ class CondominioSelectorModal {
                             ScaffoldMessenger.of(context).showSnackBar(
                               SnackBar(
                                 content: Text('Conectado a ${unidade.nome} • Catálogo exclusivo carregado'),
-                                backgroundColor: const Color(0xFF2E7D32),
+                                backgroundColor: const Color(0xFFEA580C),
                                 duration: const Duration(seconds: 2),
                               ),
                             );
@@ -161,7 +161,7 @@ class CondominioSelectorModal {
                             decoration: BoxDecoration(
                               color: isAtiva
                                   ? AppColors.primaryOrange
-                                  : (estaNoRaio ? Colors.green.shade50 : Colors.red.shade50),
+                                  : (estaNoRaio ? const Color(0xFFFFF0E6) : Colors.red.shade50),
                               borderRadius: BorderRadius.circular(8),
                             ),
                             child: Text(
@@ -171,7 +171,7 @@ class CondominioSelectorModal {
                                 fontWeight: FontWeight.w700,
                                 color: isAtiva
                                     ? Colors.white
-                                    : (estaNoRaio ? Colors.green.shade800 : Colors.red.shade700),
+                                    : (estaNoRaio ? const Color(0xFFC2410C) : Colors.red.shade700),
                               ),
                             ),
                           ),

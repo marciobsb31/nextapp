@@ -1,5 +1,6 @@
 import 'package:carousel_slider/carousel_slider.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../controllers/auth_controller.dart';
@@ -10,7 +11,11 @@ import '../../theme/app_theme.dart';
 import '../../widgets/animated_bell_notification.dart';
 import '../../widgets/next_pdv_logo.dart';
 import '../../widgets/product_image.dart';
+import '../../core/util/dinheiro.dart';
 import '../../widgets/product_detail_sheet.dart';
+import '../../widgets/avatar_iniciais.dart';
+import '../../widgets/banner_video.dart';
+import '../../widgets/barra_carrinho.dart';
 
 class HomePage extends StatefulWidget {
   final AuthController authController;
@@ -38,53 +43,8 @@ class _HomePageState extends State<HomePage> {
 
   void _adicionarComAnimacao(Product product) {
     widget.cartController.addProduct(product);
-
-    ScaffoldMessenger.of(context).hideCurrentSnackBar();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        duration: const Duration(milliseconds: 1400),
-        behavior: SnackBarBehavior.floating,
-        backgroundColor: AppColors.navyDark,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        content: Row(
-          children: [
-            ClipRRect(
-              borderRadius: BorderRadius.circular(8),
-              child: ProductImage(
-                imageUrl: product.imageUrl,
-                width: 32,
-                height: 32,
-                iconSize: 16,
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    '${product.name} adicionado!',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: GoogleFonts.poppins(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 12),
-                  ),
-                  Text(
-                    'Sacola atualizada • R\$ ${product.price.toStringAsFixed(2)}',
-                    style: GoogleFonts.poppins(color: AppColors.primaryOrange, fontSize: 10, fontWeight: FontWeight.w600),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-        action: SnackBarAction(
-          label: 'VER SACOLA',
-          textColor: AppColors.primaryOrangeLight,
-          onPressed: widget.onNavigateToCart,
-        ),
-      ),
-    );
+    // A barra "Ver carrinho" já mostra a quantidade e o total; um toque leve confirma.
+    HapticFeedback.lightImpact();
   }
 
   void _abrirDetalheProduto(Product product) {
@@ -153,6 +113,16 @@ class _HomePageState extends State<HomePage> {
         }).toList();
 
         return Scaffold(
+          // Mesmo "Ver carrinho" da aba Produtos, só quando houver itens.
+          bottomNavigationBar: ListenableBuilder(
+            listenable: widget.cartController,
+            builder: (context, _) => widget.cartController.totalItemCount == 0
+                ? const SizedBox.shrink()
+                : Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 6, 20, 16),
+                    child: BarraCarrinho(cartController: widget.cartController, aoAbrir: widget.onNavigateToCart),
+                  ),
+          ),
           backgroundColor: isDark ? AppColors.backgroundDark : AppColors.backgroundLight,
           body: SafeArea(
             child: CustomScrollView(
@@ -186,7 +156,9 @@ class _HomePageState extends State<HomePage> {
                                       border: Border.all(color: AppColors.primaryOrange, width: 2),
                                       boxShadow: AppColors.cardShadow,
                                     ),
-                                    child: Image.network(
+                                    child: !widget.authController.temFoto
+                                        ? AvatarIniciais(iniciais: widget.authController.iniciais)
+                                        : Image.network(
                                       ProductImage.formatProxyUrl(widget.authController.avatarUrl),
                                       fit: BoxFit.cover,
                                       errorBuilder: (_, __, ___) => Container(
@@ -299,42 +271,16 @@ class _HomePageState extends State<HomePage> {
                                             ),
                                           ),
                                         ),
-                                        const SizedBox(width: 6),
-                                        Container(
-                                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                          decoration: BoxDecoration(
-                                            color: Colors.white.withValues(alpha: 0.12),
-                                            borderRadius: BorderRadius.circular(6),
-                                          ),
-                                          child: Row(
-                                            mainAxisSize: MainAxisSize.min,
-                                            children: [
-                                              Icon(
-                                                LucideIcons.lock,
-                                                size: 10,
-                                                color: Colors.white,
-                                              ),
-                                              const SizedBox(width: 3),
-                                              Text(
-                                                'Sua Unidade',
-                                                style: GoogleFonts.poppins(
-                                                  fontSize: 9,
-                                                  fontWeight: FontWeight.w700,
-                                                  color: Colors.white,
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        ),
                                       ],
                                     ),
-                                      Text(
-                                        widget.authController.unit,
-                                        style: GoogleFonts.poppins(
-                                          fontSize: 11,
-                                          color: Colors.white70,
+                                      if (widget.authController.unit.isNotEmpty)
+                                        Text(
+                                          widget.authController.unit,
+                                          style: GoogleFonts.poppins(
+                                            fontSize: 11,
+                                            color: Colors.white70,
+                                          ),
                                         ),
-                                      ),
                                       if (enderecoUnidade.isNotEmpty)
                                         Text(
                                           enderecoUnidade,
@@ -351,9 +297,9 @@ class _HomePageState extends State<HomePage> {
                                 Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                                   decoration: BoxDecoration(
-                                    color: const Color(0x332D83E6),
+                                    color: const Color(0x33FF6B00),
                                     borderRadius: BorderRadius.circular(8),
-                                    border: Border.all(color: const Color(0x664A9EFF), width: 0.8),
+                                    border: Border.all(color: const Color(0x66FF6B00), width: 0.8),
                                   ),
                                   child: Row(
                                     mainAxisSize: MainAxisSize.min,
@@ -361,7 +307,7 @@ class _HomePageState extends State<HomePage> {
                                       const Icon(LucideIcons.checkCheck, size: 12, color: Colors.white),
                                       const SizedBox(width: 4),
                                       Text(
-                                        'Raio 500 m · ${lojaAtual.distanciaFormatada}',
+                                        'Sua unidade',
                                         style: GoogleFonts.poppins(
                                           fontSize: 10,
                                           fontWeight: FontWeight.w700,
@@ -415,6 +361,14 @@ class _HomePageState extends State<HomePage> {
                             final c1 = parseColor(banner.color1, AppColors.primaryOrange);
                             final c2 = parseColor(banner.color2, const Color(0xFFFF5500));
                             final hasImage = banner.imageUrl != null && banner.imageUrl!.trim().isNotEmpty;
+                            final temVideo = ehVideoDeArquivo(banner.videoUrl);
+                            final imagem = hasImage
+                                ? Image.network(
+                                    ProductImage.formatProxyUrl(urlDoServidor(banner.imageUrl!)),
+                                    fit: BoxFit.cover,
+                                    errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+                                  )
+                                : null;
 
                             return Container(
                               margin: const EdgeInsets.symmetric(horizontal: 4),
@@ -437,15 +391,11 @@ class _HomePageState extends State<HomePage> {
                                 borderRadius: BorderRadius.circular(20),
                                 child: Stack(
                                   children: [
-                                    if (hasImage)
-                                      Positioned.fill(
-                                        child: Image.network(
-                                          ProductImage.formatProxyUrl(banner.imageUrl!),
-                                          fit: BoxFit.cover,
-                                          errorBuilder: (_, __, ___) => const SizedBox.shrink(),
-                                        ),
-                                      ),
-                                    if (hasImage)
+                                    if (temVideo)
+                                      Positioned.fill(child: BannerVideo(url: banner.videoUrl!, reserva: imagem))
+                                    else if (imagem != null)
+                                      Positioned.fill(child: imagem),
+                                    if (hasImage || temVideo)
                                       Positioned.fill(
                                         child: Container(
                                           decoration: BoxDecoration(
@@ -567,7 +517,7 @@ class _HomePageState extends State<HomePage> {
                                   const SizedBox(width: 12),
                                   Expanded(
                                     child: Text(
-                                      'Buscar produto no minimarket...',
+                                      'Buscar produto',
                                       style: GoogleFonts.poppins(
                                         fontSize: 13,
                                         color: isDark ? AppColors.textSecondaryDark : AppColors.textSecondary,
@@ -575,33 +525,7 @@ class _HomePageState extends State<HomePage> {
                                       ),
                                     ),
                                   ),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                                    decoration: BoxDecoration(
-                                      gradient: AppColors.orangeGradient,
-                                      borderRadius: BorderRadius.circular(10),
-                                      boxShadow: [
-                                        BoxShadow(
-                                          color: AppColors.primaryOrange.withOpacity(0.3),
-                                          blurRadius: 6,
-                                          offset: const Offset(0, 2),
-                                        ),
-                                      ],
-                                    ),
-                                    child: Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        Text(
-                                          'Buscar',
-                                          style: GoogleFonts.poppins(
-                                            fontSize: 11.5,
-                                            fontWeight: FontWeight.w800,
-                                            color: Colors.white,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
+                                  Icon(LucideIcons.chevronRight, color: AppColors.textSecondary, size: 18),
                                 ],
                               ),
                             ),
@@ -626,7 +550,7 @@ class _HomePageState extends State<HomePage> {
                         Row(
                           children: [
                             Text(
-                              'Sugestões para você',
+                              widget.authController.ultimasComprasIds.isNotEmpty ? 'Comprar de novo' : 'Seus favoritos',
                               style: GoogleFonts.poppins(
                                 fontSize: 15,
                                 fontWeight: FontWeight.w800,
@@ -637,7 +561,7 @@ class _HomePageState extends State<HomePage> {
                         ),
                         const SizedBox(height: 2),
                         Text(
-                          'Baseado no seu histórico de compras no condomínio',
+                          'Do que você já comprou e marcou com o coração',
                           style: GoogleFonts.poppins(
                             fontSize: 11,
                             color: isDark ? AppColors.textSecondaryDark : AppColors.textSecondary,
@@ -813,10 +737,10 @@ class _HomePageState extends State<HomePage> {
                   padding: const EdgeInsets.symmetric(horizontal: 20),
                   sliver: SliverGrid(
                     gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: 3,
+                      crossAxisCount: 2,
                       mainAxisSpacing: 14,
                       crossAxisSpacing: 14,
-                      childAspectRatio: 0.48,
+                      childAspectRatio: 0.68,
                     ),
                     delegate: SliverChildBuilderDelegate(
                       (context, index) {
@@ -912,7 +836,8 @@ class _HomePageState extends State<HomePage> {
                     color: isDark ? Colors.white : AppColors.navyDark,
                   ),
                 ),
-                Text(
+                if (product.unit.trim().toLowerCase() != 'un')
+                  Text(
                   product.unit,
                   style: GoogleFonts.poppins(
                     fontSize: 9.5,
@@ -924,7 +849,7 @@ class _HomePageState extends State<HomePage> {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Text(
-                      'R\$ ${product.price.toStringAsFixed(2)}',
+                      reaisBr(product.price),
                       style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.w800, color: AppColors.primaryOrange),
                     ),
                     GestureDetector(
@@ -976,7 +901,7 @@ class _HomePageState extends State<HomePage> {
                     borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
                     child: ProductImage(
                       imageUrl: product.imageUrl,
-                      height: 96,
+                      height: 128,
                       width: double.infinity,
                       iconSize: 36,
                     ),
@@ -1047,7 +972,8 @@ class _HomePageState extends State<HomePage> {
                       ),
                     ),
                     const SizedBox(height: 4),
-                    Text(
+                    if (product.unit.trim().toLowerCase() != 'un')
+                      Text(
                       product.unit,
                       style: GoogleFonts.poppins(
                         fontSize: 10,
@@ -1063,7 +989,7 @@ class _HomePageState extends State<HomePage> {
                           children: [
                             if (product.originalPrice != null)
                               Text(
-                                'R\$ ${product.originalPrice!.toStringAsFixed(2)}',
+                                reaisBr(product.originalPrice!),
                                 style: GoogleFonts.poppins(
                                   fontSize: 10,
                                   color: Colors.grey,
@@ -1071,7 +997,7 @@ class _HomePageState extends State<HomePage> {
                                 ),
                               ),
                             Text(
-                              'R\$ ${product.price.toStringAsFixed(2)}',
+                              reaisBr(product.price),
                               style: GoogleFonts.poppins(
                                 fontSize: 13,
                                 fontWeight: FontWeight.w800,
