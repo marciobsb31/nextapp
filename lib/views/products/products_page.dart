@@ -191,7 +191,7 @@ class _ProductsPageState extends State<ProductsPage> {
                         ),
                       ),
                       const SizedBox(width: 4),
-                      const Icon(
+                      Icon(
                         LucideIcons.shieldCheck,
                         size: 11,
                         color: AppColors.primaryOrange,
@@ -228,7 +228,7 @@ class _ProductsPageState extends State<ProductsPage> {
                           right: -8,
                           child: Container(
                             padding: const EdgeInsets.all(4),
-                            decoration: const BoxDecoration(
+                            decoration: BoxDecoration(
                               color: AppColors.primaryOrange,
                               shape: BoxShape.circle,
                             ),
@@ -447,7 +447,7 @@ class _ProductsPageState extends State<ProductsPage> {
                           children: [
                             Container(
                               padding: const EdgeInsets.all(7),
-                              decoration: const BoxDecoration(
+                              decoration: BoxDecoration(
                                 color: AppColors.primaryOrange,
                                 shape: BoxShape.circle,
                               ),
@@ -663,7 +663,7 @@ class _ProductsPageState extends State<ProductsPage> {
                           onTap: () => _adicionarComAnimacao(product),
                           child: Container(
                             padding: const EdgeInsets.all(6),
-                            decoration: const BoxDecoration(
+                            decoration: BoxDecoration(
                               gradient: AppColors.orangeGradient,
                               shape: BoxShape.circle,
                             ),

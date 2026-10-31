@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import 'tema_loja.dart';
+
 class AppColors {
-  static const Color primaryOrange = Color(0xFFFF6B00);
-  static const Color primaryOrangeLight = Color(0xFFFF8C00);
+  // Cores de marca: seguem a paleta da loja escolhida no painel (padrão: laranja da casa).
+  static Color get primaryOrange => TemaLoja.instancia.paleta.primaria;
+  static Color get primaryOrangeLight => TemaLoja.instancia.paleta.primariaClara;
   static const Color navyDark = Color(0xFF0F172A);
   static const Color navyMedium = Color(0xFF1E293B);
-  static const Color backgroundLight = Color(0xFFF8FAFC);
+  static Color get backgroundLight => TemaLoja.instancia.paleta.fundo;
   static const Color cardSurface = Color(0xFFFFFFFF);
   static const Color textPrimary = Color(0xFF0F172A);
   static const Color textSecondary = Color(0xFF64748B);
@@ -22,8 +25,8 @@ class AppColors {
   static const Color borderDark = Color(0xFF243247);
 
   // Gradient para botões laranjas vibrantes
-  static const LinearGradient orangeGradient = LinearGradient(
-    colors: [Color(0xFFFF8C00), Color(0xFFFF5500)],
+  static LinearGradient get orangeGradient => LinearGradient(
+    colors: [TemaLoja.instancia.paleta.primariaClara, TemaLoja.instancia.paleta.primariaEscura],
     begin: Alignment.centerLeft,
     end: Alignment.centerRight,
   );
@@ -100,7 +103,7 @@ class AppTheme {
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
-          borderSide: const BorderSide(color: AppColors.primaryOrange, width: 2),
+          borderSide: BorderSide(color: AppColors.primaryOrange, width: 2),
         ),
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
@@ -160,7 +163,7 @@ class AppTheme {
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
-          borderSide: const BorderSide(color: AppColors.primaryOrange, width: 2),
+          borderSide: BorderSide(color: AppColors.primaryOrange, width: 2),
         ),
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(

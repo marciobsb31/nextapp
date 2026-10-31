@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:pdv_market/controllers/auth_controller.dart';
@@ -23,6 +24,7 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   setUpAll(() {
+    FlutterSecureStorage.setMockInitialValues({});
     HttpOverrides.global = _MockHttpOverrides();
   });
 

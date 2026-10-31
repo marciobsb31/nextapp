@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:dio/dio.dart';
 
 import '../config/ambiente.dart';
@@ -377,6 +379,146 @@ class ApiPdv {
       ),
     );
     return resposta.data?['emailEnviado'] == true;
+  }
+
+  /// Formas de cartão da unidade e a chave pública do PagBank para criptografar.
+  Future<Map<String, dynamic>> configCartao(Sessao sessao) async {
+    final resposta = await _enviar(
+      () => _dio.get<Map<String, dynamic>>(
+        '/api/app/pagamento/cartao/config',
+        options: Options(headers: EscopoRequisicao.cabecalhos(sessao)),
+      ),
+    );
+    return resposta.data ?? {};
+  }
+
+  /// Cria o pedido. A mesma `idempotencia` nunca gera dois pedidos, então
+  /// reenviar depois de uma queda de conexão é seguro.
+  Future<Map<String, dynamic>> criarPedido(Sessao sessao, Map<String, Object?> corpo) async {
+    final resposta = await _enviar(
+      () => _dio.post<Map<String, dynamic>>(
+        '/api/app/pedidos',
+        data: corpo,
+        options: Options(headers: EscopoRequisicao.cabecalhos(sessao)),
+      ),
+    );
+    return resposta.data ?? {};
+  }
+
+  /// Situação do pagamento; para PIX a API também confere no PagBank.
+  Future<Map<String, dynamic>> pagamentoDoPedido(Sessao sessao, int vendaId) async {
+    final resposta = await _enviar(
+      () => _dio.get<Map<String, dynamic>>(
+        '/api/app/pedidos/$vendaId/pagamento',
+        options: Options(headers: EscopoRequisicao.cabecalhos(sessao)),
+      ),
+    );
+    return resposta.data ?? {};
+  }
+
+  /// Geladeira autônoma lida pelo morador (nome, unidade, se exige compra, se está online).
+  Future<Map<String, dynamic>> geladeira(Sessao sessao, int id) async {
+    final resposta = await _enviar(
+      () => _dio.get<Map<String, dynamic>>(
+        '/api/app/geladeiras/$id',
+        options: Options(headers: EscopoRequisicao.cabecalhos(sessao)),
+      ),
+    );
+    return resposta.data ?? {};
+  }
+
+  /// QR de abertura de uso único para um pedido pago nesta geladeira.
+  Future<Map<String, dynamic>> gerarAberturaGeladeira(Sessao sessao, int id, int vendaId) async {
+    final resposta = await _enviar(
+      () => _dio.post<Map<String, dynamic>>(
+        '/api/app/geladeiras/$id/abertura',
+        data: {'vendaId': vendaId},
+        options: Options(headers: EscopoRequisicao.cabecalhos(sessao)),
+      ),
+    );
+    return resposta.data ?? {};
+  }
+
+  /// Geladeira sem leitor: o próprio app usa o QR de abertura.
+  Future<Map<String, dynamic>> abrirGeladeiraPeloApp(Sessao sessao, String qr) async {
+    final resposta = await _enviar(
+      () => _dio.post<Map<String, dynamic>>(
+        '/api/app/geladeiras/abrir',
+        data: {'qr': qr},
+        options: Options(headers: EscopoRequisicao.cabecalhos(sessao)),
+      ),
+    );
+    return resposta.data ?? {};
+  }
+
+  /// Muda a unidade do morador (a da geladeira lida), quando o contrato permite.
+  Future<Map<String, dynamic>> trocarUnidade(Sessao sessao, int lojaId) async {
+    final resposta = await _enviar(
+      () => _dio.put<Map<String, dynamic>>(
+        '/api/app/eu/unidade',
+        data: {'lojaId': lojaId},
+        options: Options(headers: EscopoRequisicao.cabecalhos(sessao)),
+      ),
+    );
+    return resposta.data ?? {};
+  }
+
+  /// Morador abre porta, catraca ou freezer pelo QR do equipamento. A pessoa é
+  /// a da sessão; a API aplica as regras do condomínio e enfileira a ordem na placa.
+  Future<Map<String, dynamic>> abrirPorQr(Sessao sessao, {required String qrCode, required String chave}) async {
+    final resposta = await _enviar(
+      () => _dio.post<Map<String, dynamic>>(
+        '/api/app/smart-access/abrir',
+        data: {'qrCode': qrCode, 'chaveIdempotencia': chave},
+        options: Options(headers: EscopoRequisicao.cabecalhos(sessao)),
+      ),
+    );
+    return resposta.data ?? {};
+  }
+
+  /// Paleta de cores que a loja escolheu no painel.
+  Future<Map<String, dynamic>> aparencia(Sessao sessao, int lojaId) async {
+    final resposta = await _enviar(
+      () => _dio.get<Map<String, dynamic>>(
+        '/api/app/aparencia',
+        queryParameters: {'lojaId': lojaId},
+        options: Options(headers: EscopoRequisicao.cabecalhos(sessao)),
+      ),
+    );
+    return resposta.data ?? {};
+  }
+
+  /// Canal SSE do contrato (`/api/tempo-real/eventos`). Devolve cada evento
+  /// como `(nome, dados)`. A conexão fica aberta até o servidor ou o app fechar.
+  Stream<({String evento, String dados})> eventosTempoReal(Sessao sessao) async* {
+    final resposta = await _dio.get<ResponseBody>(
+      '/api/tempo-real/eventos',
+      options: Options(
+        headers: {...EscopoRequisicao.cabecalhos(sessao), 'Accept': 'text/event-stream'},
+        responseType: ResponseType.stream,
+        receiveTimeout: Duration.zero,
+      ),
+    );
+    final corpo = resposta.data;
+    if (corpo == null) return;
+    var evento = 'message';
+    final dados = StringBuffer();
+    final linhas = corpo.stream
+        .cast<List<int>>()
+        .transform(const Utf8Decoder(allowMalformed: true))
+        .transform(const LineSplitter());
+    await for (final linha in linhas) {
+      if (linha.isEmpty) {
+        if (dados.isNotEmpty) yield (evento: evento, dados: dados.toString());
+        evento = 'message';
+        dados.clear();
+      } else if (linha.startsWith('event:')) {
+        evento = linha.substring(6).trim();
+      } else if (linha.startsWith('data:')) {
+        if (dados.isNotEmpty) dados.write('\n');
+        dados.write(linha.substring(5).trimLeft());
+      }
+    }
   }
 
   Future<T> _enviar<T>(Future<T> Function() chamada) async {

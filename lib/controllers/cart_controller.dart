@@ -12,8 +12,8 @@ class CartController extends ChangeNotifier {
 
   double get subtotal => _items.fold(0.0, (sum, item) => sum + item.totalPrice);
 
-  double get serviceFee =>
-      _items.isEmpty ? 0.0 : 1.50; // Taxa de conveniência/acesso
+  // O servidor não cobra taxa; o total que vale é o calculado pela API no pagamento.
+  double get serviceFee => 0.0;
 
   double get total => subtotal + serviceFee;
 

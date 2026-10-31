@@ -7,6 +7,9 @@ class FalhaApi implements Exception {
   final String? codigo;
   final int? status;
 
+  /// A chamada nem chegou à API (sem internet, servidor fora do ar ou tempo esgotado).
+  bool get semConexao => codigo == 'SEM_CONEXAO';
+
   @override
   String toString() => mensagem;
 }
@@ -24,8 +27,10 @@ FalhaApi falhaDe(Object erro) {
     }
     if (erro.type == DioExceptionType.connectionError ||
         erro.type == DioExceptionType.connectionTimeout ||
-        erro.type == DioExceptionType.receiveTimeout) {
-      return const FalhaApi('Não consegui falar com a API. Confirme se o servidor está ligado.');
+        erro.type == DioExceptionType.sendTimeout ||
+        erro.type == DioExceptionType.receiveTimeout ||
+        (erro.type == DioExceptionType.unknown && erro.response == null)) {
+      return const FalhaApi('Não consegui falar com a API. Confirme se o servidor está ligado.', codigo: 'SEM_CONEXAO');
     }
   }
   return const FalhaApi('Não foi possível concluir agora. Tente de novo.');

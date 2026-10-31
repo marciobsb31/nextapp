@@ -5,19 +5,24 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../controllers/auth_controller.dart';
 import '../../core/rede/api.dart';
 import '../../core/rede/falha_api.dart';
+import '../../core/sessao/acesso_lembrado.dart';
+import '../../core/sessao/sessao.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/curved_header.dart';
 import '../../widgets/gradient_button.dart';
+import '../../widgets/logo_animada.dart';
 import 'register_page.dart';
 
 class LoginPage extends StatefulWidget {
   final AuthController authController;
   final VoidCallback onLoginSuccess;
+  final AcessoLembrado? acesso;
 
   const LoginPage({
     super.key,
     required this.authController,
     required this.onLoginSuccess,
+    this.acesso,
   });
 
   @override
@@ -27,10 +32,51 @@ class LoginPage extends StatefulWidget {
 class _LoginPageState extends State<LoginPage> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  late final AcessoLembrado _acesso = widget.acesso ?? AcessoLembrado();
   bool _obscurePassword = true;
   bool _isLoading = false;
   bool _isGoogleLoading = false;
+  bool _lembrar = false;
+  bool _biometriaPronta = false;
   String? _errorMessage;
+
+  @override
+  void initState() {
+    super.initState();
+    _carregarLembrado();
+  }
+
+  Future<void> _carregarLembrado() async {
+    final lembrar = await _acesso.lembrarMarcado();
+    final email = await _acesso.emailLembrado();
+    final guardada = await _acesso.sessaoGuardada();
+    final biometria = guardada != null && await _acesso.biometriaDisponivel();
+    if (!mounted) return;
+    setState(() {
+      _lembrar = lembrar;
+      if (email.isNotEmpty && _emailController.text.isEmpty) _emailController.text = email;
+      _biometriaPronta = biometria;
+    });
+  }
+
+  Future<void> _concluirEntrada(Sessao sessao) async {
+    await _acesso.aposEntrar(sessao, lembrar: _lembrar);
+    widget.authController.entrarComSessao(sessao);
+    if (mounted) widget.onLoginSuccess();
+  }
+
+  String _mensagemDe(FalhaApi falha) {
+    switch (falha.codigo) {
+      case 'EMAIL_NAO_CONFIRMADO':
+        return 'Confirme o cadastro pelo link enviado ao seu e-mail antes de entrar.';
+      case 'ACESSO_INATIVO':
+        return 'Este acesso está inativo. Solicite a reativação à administração.';
+      case 'CONTRATO_SUSPENSO':
+        return 'O contrato deste condomínio está suspenso.';
+      default:
+        return falha.mensagem;
+    }
+  }
 
   @override
   void dispose() {
@@ -87,50 +133,15 @@ class _LoginPageState extends State<LoginPage> {
           email.toLowerCase().contains('teen');
       widget.authController.setMaior18(!isMenor);
 
-      widget.authController.login(
-        email: sessao.email.isNotEmpty ? sessao.email : email,
-        password: password,
-        sessao: sessao,
-      );
-
-      widget.authController.carregarCatalogoCondominio();
-
-      if (mounted) {
-        setState(() => _isLoading = false);
-        widget.onLoginSuccess();
-      }
+      if (mounted) setState(() => _isLoading = false);
+      await _concluirEntrada(sessao);
       return;
     } catch (erro) {
       final falha = falhaDe(erro);
-      if (falha.codigo == 'EMAIL_NAO_CONFIRMADO') {
-        if (mounted) {
-          setState(() {
-            _isLoading = false;
-            _errorMessage = 'Confirme o cadastro pelo link enviado ao seu e-mail antes de entrar.';
-          });
-        }
-        return;
-      } else if (falha.codigo == 'ACESSO_INATIVO') {
-        if (mounted) {
-          setState(() {
-            _isLoading = false;
-            _errorMessage = 'Este acesso está inativo. Solicite a reativação à administração.';
-          });
-        }
-        return;
-      } else if (falha.codigo == 'CONTRATO_SUSPENSO') {
-        if (mounted) {
-          setState(() {
-            _isLoading = false;
-            _errorMessage = 'O contrato deste condomínio está suspenso.';
-          });
-        }
-        return;
-      }
       if (mounted) {
         setState(() {
           _isLoading = false;
-          _errorMessage = falha.mensagem;
+          _errorMessage = _mensagemDe(falha);
         });
       }
     }
@@ -183,7 +194,7 @@ class _LoginPageState extends State<LoginPage> {
                                   width: 1.5,
                                 ),
                               ),
-                              child: const Icon(
+                              child: Icon(
                                 LucideIcons.lockKeyhole,
                                 color: AppColors.primaryOrange,
                                 size: 28,
@@ -383,13 +394,25 @@ class _LoginPageState extends State<LoginPage> {
       _errorMessage = null;
     });
 
-    // O sistema verifica se o usuário Google já existe e possui unidade ativa
-    final usuarioExiste = await widget.authController.loginWithGoogle();
+    // A API decide: conta existente entra; conta nova vai para o cadastro do endereço.
+    final Sessao? sessao;
+    try {
+      sessao = await widget.authController.entrarComGoogle();
+    } catch (erro) {
+      final falha = falhaDe(erro);
+      if (mounted) {
+        setState(() {
+          _isGoogleLoading = false;
+          if (falha.codigo != 'CANCELADO') _errorMessage = _mensagemDe(falha);
+        });
+      }
+      return;
+    }
     if (!mounted) return;
     setState(() => _isGoogleLoading = false);
 
-    if (usuarioExiste) {
-      widget.onLoginSuccess();
+    if (sessao != null) {
+      await _concluirEntrada(sessao);
     } else {
       // Usuário não existe no sistema: feedback claro e redirecionamento para o cadastro
       ScaffoldMessenger.of(context).showSnackBar(
@@ -431,13 +454,33 @@ class _LoginPageState extends State<LoginPage> {
     }
   }
 
+  /// A biometria só destrava a sessão lembrada, e a API confirma o token antes de entrar.
   void _handleBiometrics() async {
+    setState(() => _errorMessage = null);
+    final sessao = await _acesso.sessaoGuardada();
+    if (sessao == null) {
+      setState(() {
+        _biometriaPronta = false;
+        _errorMessage = 'Entre com e-mail e senha e marque "Lembrar de mim" para usar a biometria.';
+      });
+      return;
+    }
+    if (!await _acesso.confirmarBiometria()) return;
     setState(() => _isLoading = true);
-    final success = await widget.authController.authenticateBiometrics();
-    if (mounted) {
-      setState(() => _isLoading = false);
-      if (success) {
-        widget.onLoginSuccess();
+    try {
+      await ApiPdv.padrao().eu(sessao);
+      if (mounted) setState(() => _isLoading = false);
+      await _concluirEntrada(sessao);
+    } catch (erro) {
+      final falha = falhaDe(erro);
+      final expirou = falha.status == 401 || falha.status == 403;
+      if (expirou) await _acesso.esquecerSessao();
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          if (expirou) _biometriaPronta = false;
+          _errorMessage = expirou ? 'Sua sessão expirou. Entre com e-mail e senha.' : _mensagemDe(falha);
+        });
       }
     }
   }
@@ -461,28 +504,9 @@ class _LoginPageState extends State<LoginPage> {
               child: SafeArea(
                 bottom: false,
                 child: Center(
-                  child: Padding(
-                    padding: const EdgeInsets.only(bottom: 22),
-                    child: Container(
-                      width: 168,
-                      height: 126,
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(20),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.12),
-                            blurRadius: 16,
-                            offset: const Offset(0, 5),
-                          ),
-                        ],
-                      ),
-                      child: Image.asset(
-                        'assets/images/nextpdv_logo.jpg',
-                        fit: BoxFit.contain,
-                      ),
-                    ),
+                  child: const Padding(
+                    padding: EdgeInsets.only(bottom: 8),
+                    child: LogoAnimada(largura: 190),
                   ),
                 ),
               ),
@@ -610,10 +634,41 @@ class _LoginPageState extends State<LoginPage> {
                   ),
                   const SizedBox(height: 6),
 
-                  // Link Esqueceu a Senha? à Direita em Laranja
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: TextButton(
+                  // Lembrar de mim à esquerda, Esqueceu a senha? à direita
+                  Row(
+                    children: [
+                      Expanded(
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(10),
+                          onTap: () => setState(() => _lembrar = !_lembrar),
+                          child: Row(
+                            children: [
+                              SizedBox(
+                                width: 32,
+                                height: 32,
+                                child: Checkbox(
+                                  value: _lembrar,
+                                  activeColor: AppColors.primaryOrange,
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(5)),
+                                  onChanged: (valor) => setState(() => _lembrar = valor ?? false),
+                                ),
+                              ),
+                              const SizedBox(width: 4),
+                              Flexible(
+                                child: Text(
+                                  'Lembrar de mim',
+                                  style: GoogleFonts.poppins(
+                                    fontSize: 12.5,
+                                    fontWeight: FontWeight.w600,
+                                    color: isDark ? Colors.white70 : AppColors.navyDark,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      TextButton(
                       onPressed: _handleEsqueceuSenha,
                       style: TextButton.styleFrom(
                         padding: const EdgeInsets.symmetric(
@@ -630,6 +685,7 @@ class _LoginPageState extends State<LoginPage> {
                         ),
                       ),
                     ),
+                    ],
                   ),
                   const SizedBox(height: 14),
 
@@ -738,8 +794,8 @@ class _LoginPageState extends State<LoginPage> {
 
                   const SizedBox(height: 20),
 
-                  // Suporte Biometria Opcional
-                  Center(
+                  // Biometria: aparece só com sessão lembrada neste aparelho
+                  if (_biometriaPronta) Center(
                     child: InkWell(
                       onTap: _handleBiometrics,
                       borderRadius: BorderRadius.circular(20),
@@ -751,7 +807,7 @@ class _LoginPageState extends State<LoginPage> {
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            const Icon(
+                            Icon(
                               LucideIcons.fingerprint,
                               size: 20,
                               color: AppColors.primaryOrange,

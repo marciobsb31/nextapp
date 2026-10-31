@@ -160,7 +160,7 @@ class _SwipeToPayState extends State<SwipeToPay> with SingleTickerProviderStateM
                         ),
                       ],
                     ),
-                    child: const Center(
+                    child: Center(
                       child: Icon(
                         LucideIcons.arrowRight,
                         color: AppColors.primaryOrange,

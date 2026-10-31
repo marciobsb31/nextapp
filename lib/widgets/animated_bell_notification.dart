@@ -101,7 +101,7 @@ class _AnimatedBellNotificationState extends State<AnimatedBellNotification>
                           color: AppColors.primaryOrange.withValues(alpha: 0.12),
                           shape: BoxShape.circle,
                         ),
-                        child: const Icon(LucideIcons.bell, color: AppColors.primaryOrange, size: 20),
+                        child: Icon(LucideIcons.bell, color: AppColors.primaryOrange, size: 20),
                       ),
                       const SizedBox(width: 10),
                       Text(

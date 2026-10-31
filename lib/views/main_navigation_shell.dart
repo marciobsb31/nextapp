@@ -50,7 +50,7 @@ class _MainNavigationShellState extends State<MainNavigationShell>
   void _openSmartAccessScanner() {
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (context) => const SmartAccessModal()),
+      MaterialPageRoute(builder: (context) => SmartAccessModal(sessao: widget.authController.sessaoAtual)),
     );
   }
 
@@ -60,6 +60,7 @@ class _MainNavigationShellState extends State<MainNavigationShell>
       MaterialPageRoute(
         builder: (context) => CartPage(
           cartController: _cartController,
+          sessao: widget.authController.sessaoAtual,
           onBackToShop: () => Navigator.pop(context),
         ),
       ),
@@ -120,7 +121,7 @@ class _MainNavigationShellState extends State<MainNavigationShell>
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        const Icon(LucideIcons.doorClosed, color: AppColors.primaryOrange, size: 16),
+                        Icon(LucideIcons.doorClosed, color: AppColors.primaryOrange, size: 16),
                         const SizedBox(width: 8),
                         Text(
                           'Modo Especial: Acesso restrito a Portas & Freezers',

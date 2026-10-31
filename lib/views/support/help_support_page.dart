@@ -185,7 +185,7 @@ class _HelpSupportPageState extends State<HelpSupportPage> {
                                   color: AppColors.primaryOrange.withValues(alpha: 0.1),
                                   borderRadius: BorderRadius.circular(10),
                                 ),
-                                child: const Icon(
+                                child: Icon(
                                   LucideIcons.helpCircle,
                                   color: AppColors.primaryOrange,
                                   size: 18,

@@ -232,7 +232,7 @@ class _HomePageState extends State<HomePage> {
                                               right: -8,
                                               child: Container(
                                                 padding: const EdgeInsets.all(4),
-                                                decoration: const BoxDecoration(
+                                                decoration: BoxDecoration(
                                                   color: AppColors.primaryOrange,
                                                   shape: BoxShape.circle,
                                                 ),
@@ -279,7 +279,7 @@ class _HomePageState extends State<HomePage> {
                                   color: AppColors.primaryOrange.withValues(alpha: 0.12),
                                   shape: BoxShape.circle,
                                 ),
-                                child: const Icon(LucideIcons.mapPin, color: AppColors.primaryOrange, size: 16),
+                                child: Icon(LucideIcons.mapPin, color: AppColors.primaryOrange, size: 16),
                               ),
                               const SizedBox(width: 10),
                               Expanded(
@@ -563,7 +563,7 @@ class _HomePageState extends State<HomePage> {
                               ),
                               child: Row(
                                 children: [
-                                  const Icon(LucideIcons.search, color: AppColors.primaryOrange, size: 20),
+                                  Icon(LucideIcons.search, color: AppColors.primaryOrange, size: 20),
                                   const SizedBox(width: 12),
                                   Expanded(
                                     child: Text(

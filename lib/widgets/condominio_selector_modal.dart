@@ -50,7 +50,7 @@ class CondominioSelectorModal {
                       color: AppColors.primaryOrange.withValues(alpha: 0.12),
                       borderRadius: BorderRadius.circular(12),
                     ),
-                    child: const Icon(LucideIcons.building2, color: AppColors.primaryOrange, size: 20),
+                    child: Icon(LucideIcons.building2, color: AppColors.primaryOrange, size: 20),
                   ),
                   const SizedBox(width: 12),
                   Expanded(

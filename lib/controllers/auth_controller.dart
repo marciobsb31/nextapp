@@ -1,7 +1,13 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 import '../core/config/ambiente.dart';
+import '../core/pagamento/fila_pedidos.dart';
+import '../core/rede/aparencia_ao_vivo.dart';
 import '../core/rede/api.dart';
+import '../core/rede/falha_api.dart';
+import '../theme/tema_loja.dart';
 import '../core/sessao/sessao.dart';
 import '../models/admin_banner.dart';
 import '../models/category_model.dart';
@@ -32,6 +38,7 @@ class AuthController extends ChangeNotifier {
   String _avatarUrl = _avatarPadrao;
   Sessao? _sessaoAtual;
   final ApiPdv _apiPdv = ApiPdv.padrao();
+  late final AparenciaAoVivo _aparencia = AparenciaAoVivo(_apiPdv);
   int _unreadNotifications = 3;
   ThemeMode _themeMode = ThemeMode.light;
 
@@ -53,7 +60,6 @@ class AuthController extends ChangeNotifier {
   int _registerStep = 1; // 1: Endereço & Unidade (500m) | 2: Dados Pessoais & Senha
   GoogleProfileData? _pendingGoogleProfile;
   bool _needsAddressCompletion = false;
-  bool _userHasRegisteredAccount = false;
 
   // Banners sincronizados do painel Admin (Aplicativo/Anúncios)
   List<AdminBanner> _bannersCarregados = [];
@@ -160,6 +166,7 @@ class AuthController extends ChangeNotifier {
     }
   }
   LojaUnidade get unidadeAtual => _unidadeAtual;
+  Sessao? get sessaoAtual => _sessaoAtual;
   String get condoName => _unidadeAtual.nome;
   String get unit => 'Apto $_apartamento • $_bloco';
   int get registerStep => _registerStep;
@@ -386,44 +393,95 @@ class AuthController extends ChangeNotifier {
     // Consulta permissões de Smart Access ao logar
     verificarPermissoesSistemaWeb();
 
+    // Cores da loja configuradas no painel, com atualização ao vivo
+    if (sessao != null && sessao.autenticada) {
+      _aparencia.iniciar(sessao);
+      _iniciarEnvioDaFila(sessao);
+    }
+
     notifyListeners();
   }
 
-  /// Login com Google: verifica se o usuário já existe no sistema.
-  /// Se existir com endereço cadastrado e unidade válida, loga diretamente.
-  /// Se não existir, guarda os dados (com foto oculta) e sinaliza redirecionamento para a tela de cadastro.
-  Future<bool> loginWithGoogle() async {
-    await Future.delayed(const Duration(milliseconds: 600));
+  final FilaPedidos _fila = FilaPedidos();
+  Timer? _envioFila;
+  int _pedidosPendentes = 0;
 
-    final googleProfile = GoogleProfileData(
-      name: 'Márcio Silva',
-      email: 'marcio.silva.google@gmail.com',
-      photoUrl: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=300&auto=format&fit=crop&q=80',
-      sub: 'google_oauth_sub_${DateTime.now().millisecondsSinceEpoch}',
-    );
+  /// Pedidos "na maquininha" feitos sem internet que ainda não chegaram à loja.
+  int get pedidosPendentes => _pedidosPendentes;
 
-    _pendingGoogleProfile = googleProfile;
-
-    // Se o usuário ainda não tiver conta registrada / endereço
-    if (!_userHasRegisteredAccount || _cep.isEmpty || _numero.isEmpty) {
-      _needsAddressCompletion = true;
-      _userName = googleProfile.name;
-      _userEmail = googleProfile.email;
-      // Nota: a foto permanece salva no pendingGoogleProfile de forma oculta sem ser exibida no cadastro
-      notifyListeners();
-      return false; // Usuário não existe -> redirecionar para tela de cadastro
+  /// Envia os pedidos guardados sem internet agora e a cada minuto, enquanto
+  /// houver sessão. A chave de cada pedido evita duplicar na loja.
+  void _iniciarEnvioDaFila(Sessao sessao) {
+    _envioFila?.cancel();
+    Future<void> enviar() async {
+      if (_sessaoAtual != sessao) return;
+      await _fila.enviar(_apiPdv, sessao);
+      final restantes = (await _fila.listar(email: sessao.email)).where((p) => p.erro == null).length;
+      if (restantes != _pedidosPendentes) {
+        _pedidosPendentes = restantes;
+        notifyListeners();
+      }
     }
 
-    _isAuthenticated = true;
-    _userName = googleProfile.name;
-    _userEmail = googleProfile.email;
-    _avatarUrl = googleProfile.photoUrl;
-    _needsAddressCompletion = false;
+    enviar();
+    _envioFila = Timer.periodic(const Duration(minutes: 1), (_) => enviar());
+  }
 
+  /// Entra com uma sessão emitida pela API (senha, Google ou "Lembrar de mim").
+  void entrarComSessao(Sessao sessao) {
+    login(email: sessao.email, password: '', sessao: sessao);
     carregarCatalogoCondominio();
-    verificarPermissoesSistemaWeb();
-    notifyListeners();
-    return true;
+  }
+
+  bool _googleIniciado = false;
+
+  /// Login com Google de verdade: o Google devolve o idToken e quem decide é a
+  /// API (`POST /api/auth/google`), que também barra e-mail não confirmado,
+  /// acesso inativo e contrato suspenso.
+  ///
+  /// Devolve a sessão quando a conta existe. Devolve `null` quando a API pede
+  /// o cadastro do endereço; nesse caso o perfil do Google fica em
+  /// [pendingGoogleProfile] para a tela de cadastro.
+  Future<Sessao?> entrarComGoogle() async {
+    final config = await _apiPdv.obterGoogleConfig();
+    final clientId = (config['clientId'] ?? '').toString();
+    if (config['habilitado'] != true || clientId.isEmpty) {
+      throw const FalhaApi('O login com Google não está ativo neste servidor.');
+    }
+    final google = GoogleSignIn.instance;
+    if (!_googleIniciado) {
+      await google.initialize(serverClientId: kIsWeb ? null : clientId, clientId: kIsWeb ? clientId : null);
+      _googleIniciado = true;
+    }
+    if (!google.supportsAuthenticate()) {
+      throw const FalhaApi('No navegador, entre com e-mail e senha. O Google funciona no aplicativo do celular.');
+    }
+    final GoogleSignInAccount conta;
+    try {
+      conta = await google.authenticate();
+    } on GoogleSignInException catch (erro) {
+      if (erro.code == GoogleSignInExceptionCode.canceled) {
+        throw const FalhaApi('Login com Google cancelado.', codigo: 'CANCELADO');
+      }
+      throw FalhaApi('O Google não concluiu o login: ${erro.description ?? erro.code.name}.');
+    }
+    final idToken = conta.authentication.idToken ?? '';
+    if (idToken.isEmpty) {
+      throw const FalhaApi('O Google não devolveu a identificação da conta. Tente de novo.');
+    }
+    try {
+      final resposta = await _apiPdv.entrarComGoogle(idToken);
+      return Sessao.deLogin(resposta);
+    } on FalhaApi catch (falha) {
+      if (falha.codigo != 'CADASTRO_OBRIGATORIO') rethrow;
+      iniciarCadastroComGoogle(GoogleProfileData(
+        name: conta.displayName ?? '',
+        email: conta.email,
+        photoUrl: conta.photoUrl ?? '',
+        sub: conta.id,
+      ));
+      return null;
+    }
   }
 
   void iniciarCadastroComGoogle(GoogleProfileData profile) {
@@ -480,8 +538,7 @@ class AuthController extends ChangeNotifier {
     if (birthDate != null) {
       setDataNascimento(birthDate);
     }
-    _userHasRegisteredAccount = true;
-    _isAuthenticated = true;
+    // O acesso só abre depois do e-mail confirmado e do login na API.
     _needsAddressCompletion = false;
     _pendingGoogleProfile = null;
 
@@ -502,18 +559,14 @@ class AuthController extends ChangeNotifier {
   }
 
   void logout() {
+    _aparencia.parar();
+    _envioFila?.cancel();
+    _pedidosPendentes = 0;
+    TemaLoja.instancia.restaurarPadrao();
     _isAuthenticated = false;
     _sessaoAtual = null;
     _avatarUrl = _avatarPadrao;
     notifyListeners();
-  }
-
-  Future<bool> authenticateBiometrics() async {
-    await Future.delayed(const Duration(milliseconds: 600));
-    _isAuthenticated = true;
-    verificarPermissoesSistemaWeb();
-    notifyListeners();
-    return true;
   }
 
   void setRegisterStep(int step) {
@@ -529,6 +582,8 @@ class AuthController extends ChangeNotifier {
   @override
   void dispose() {
     pararRealtimeProdutos();
+    _aparencia.parar();
+    _envioFila?.cancel();
     super.dispose();
   }
 }

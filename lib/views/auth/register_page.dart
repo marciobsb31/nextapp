@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../controllers/auth_controller.dart';
+import '../../core/documento/documentos.dart';
 import '../../core/rede/api.dart';
 import '../../core/rede/falha_api.dart';
 import '../../models/loja_unidade.dart';
@@ -48,6 +50,7 @@ class _RegisterPageState extends State<RegisterPage> {
   late final TextEditingController _nameController;
   late final TextEditingController _emailController;
   final _phoneController = TextEditingController();
+  final _cpfController = TextEditingController();
   final _passwordController = TextEditingController();
 
   late final ViaCepService _viaCepService;
@@ -97,6 +100,7 @@ class _RegisterPageState extends State<RegisterPage> {
     _nameController.dispose();
     _emailController.dispose();
     _phoneController.dispose();
+    _cpfController.dispose();
     _passwordController.dispose();
     super.dispose();
   }
@@ -247,6 +251,17 @@ class _RegisterPageState extends State<RegisterPage> {
       return;
     }
 
+    // CPF obrigatório no cadastro rápido (também identifica o comprador nas geladeiras e na nota).
+    if (!cpfValido(_cpfController.text)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Informe um CPF válido.', style: GoogleFonts.poppins()),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+      return;
+    }
+
     if (senha.length < 6) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -271,6 +286,7 @@ class _RegisterPageState extends State<RegisterPage> {
         'numeroEndereco': _numeroController.text.trim(),
         'complemento': _complementoController.text.trim(),
         'telefone': _phoneController.text.trim(),
+        'cpf': _cpfController.text.replaceAll(RegExp(r'\D'), ''),
       });
     } catch (erro) {
       if (!mounted) return;
@@ -521,10 +537,21 @@ class _RegisterPageState extends State<RegisterPage> {
                 const SizedBox(height: 14),
                 InkWell(
                   onTap: () async {
-                    final success = await widget.authController.loginWithGoogle();
-                    if (success) {
-                      widget.onRegisterSuccess();
-                      if (context.mounted) Navigator.pop(context);
+                    final messenger = ScaffoldMessenger.of(context);
+                    try {
+                      final sessao = await widget.authController.entrarComGoogle();
+                      if (sessao != null) {
+                        widget.authController.entrarComSessao(sessao);
+                        widget.onRegisterSuccess();
+                        if (context.mounted) Navigator.pop(context);
+                      } else if (mounted) {
+                        setState(() {});
+                      }
+                    } catch (erro) {
+                      final falha = falhaDe(erro);
+                      if (falha.codigo != 'CANCELADO') {
+                        messenger.showSnackBar(SnackBar(content: Text(falha.mensagem)));
+                      }
                     }
                   },
                   borderRadius: BorderRadius.circular(16),
@@ -740,7 +767,7 @@ class _RegisterPageState extends State<RegisterPage> {
                 color: AppColors.primaryOrange.withOpacity(0.12),
                 shape: BoxShape.circle,
               ),
-              child: const Icon(LucideIcons.mapPin, color: AppColors.primaryOrange, size: 20),
+              child: Icon(LucideIcons.mapPin, color: AppColors.primaryOrange, size: 20),
             ),
             const SizedBox(width: 10),
             Expanded(
@@ -853,7 +880,7 @@ class _RegisterPageState extends State<RegisterPage> {
             filled: _isLogradouroReadOnly,
             fillColor: _isLogradouroReadOnly ? const Color(0xFFF1F5F9) : Colors.white,
             suffixIcon: _isLogradouroReadOnly
-                ? const Tooltip(
+                ? Tooltip(
                     message: 'Preenchido automaticamente pelo ViaCEP (Somente leitura)',
                     child: Icon(LucideIcons.lock, color: AppColors.primaryOrange, size: 16),
                   )
@@ -906,7 +933,7 @@ class _RegisterPageState extends State<RegisterPage> {
                   filled: _isBairroReadOnly,
                   fillColor: _isBairroReadOnly ? const Color(0xFFF1F5F9) : Colors.white,
                   suffixIcon: _isBairroReadOnly
-                      ? const Tooltip(
+                      ? Tooltip(
                           message: 'Preenchido automaticamente pelo ViaCEP (Somente leitura)',
                           child: Icon(LucideIcons.lock, color: AppColors.primaryOrange, size: 16),
                         )
@@ -925,7 +952,7 @@ class _RegisterPageState extends State<RegisterPage> {
                   filled: _isCidadeReadOnly,
                   fillColor: _isCidadeReadOnly ? const Color(0xFFF1F5F9) : Colors.white,
                   suffixIcon: _isCidadeReadOnly
-                      ? const Tooltip(
+                      ? Tooltip(
                           message: 'Preenchido automaticamente pelo ViaCEP (Somente leitura)',
                           child: Icon(LucideIcons.lock, color: AppColors.primaryOrange, size: 16),
                         )
@@ -944,7 +971,7 @@ class _RegisterPageState extends State<RegisterPage> {
                   filled: _isUfReadOnly,
                   fillColor: _isUfReadOnly ? const Color(0xFFF1F5F9) : Colors.white,
                   suffixIcon: _isUfReadOnly
-                      ? const Tooltip(
+                      ? Tooltip(
                           message: 'Preenchido automaticamente pelo ViaCEP (Somente leitura)',
                           child: Icon(LucideIcons.lock, color: AppColors.primaryOrange, size: 16),
                         )
@@ -989,7 +1016,7 @@ class _RegisterPageState extends State<RegisterPage> {
         // ==========================================
         Row(
           children: [
-            const Icon(LucideIcons.radar, color: AppColors.primaryOrange, size: 18),
+            Icon(LucideIcons.radar, color: AppColors.primaryOrange, size: 18),
             const SizedBox(width: 6),
             Text(
               'Unidades no Raio de 500 Metros',
@@ -1188,7 +1215,7 @@ class _RegisterPageState extends State<RegisterPage> {
                 color: AppColors.primaryOrange.withOpacity(0.12),
                 shape: BoxShape.circle,
               ),
-              child: const Icon(LucideIcons.userCheck, color: AppColors.primaryOrange, size: 20),
+              child: Icon(LucideIcons.userCheck, color: AppColors.primaryOrange, size: 20),
             ),
             const SizedBox(width: 10),
             Expanded(
@@ -1257,7 +1284,7 @@ class _RegisterPageState extends State<RegisterPage> {
           ),
           child: Row(
             children: [
-              const Icon(LucideIcons.shieldCheck, color: AppColors.primaryOrange, size: 22),
+              Icon(LucideIcons.shieldCheck, color: AppColors.primaryOrange, size: 22),
               const SizedBox(width: 10),
               Expanded(
                 child: Column(
@@ -1325,6 +1352,19 @@ class _RegisterPageState extends State<RegisterPage> {
 
         const SizedBox(height: 14),
 
+        // CPF (obrigatório)
+        TextField(
+          controller: _cpfController,
+          keyboardType: TextInputType.number,
+          inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[\d.\-]')), LengthLimitingTextInputFormatter(14)],
+          decoration: const InputDecoration(
+            labelText: 'CPF *',
+            prefixIcon: Icon(LucideIcons.idCard, color: AppColors.textSecondary, size: 20),
+          ),
+        ),
+
+        const SizedBox(height: 14),
+
         // Senha de Acesso
         TextField(
           controller: _passwordController,
@@ -1387,7 +1427,7 @@ class _RegisterPageState extends State<RegisterPage> {
           ),
           child: Row(
             children: [
-              const Icon(LucideIcons.keyRound, color: AppColors.primaryOrange, size: 20),
+              Icon(LucideIcons.keyRound, color: AppColors.primaryOrange, size: 20),
               const SizedBox(width: 10),
               Expanded(
                 child: Text(

@@ -182,7 +182,7 @@ class _OrdersPageState extends State<OrdersPage> {
                           color: AppColors.primaryOrange.withValues(alpha: 0.12),
                           borderRadius: BorderRadius.circular(12),
                         ),
-                        child: const Icon(LucideIcons.receiptText, color: AppColors.primaryOrange, size: 22),
+                        child: Icon(LucideIcons.receiptText, color: AppColors.primaryOrange, size: 22),
                       ),
                       const SizedBox(width: 12),
                       Column(
@@ -515,7 +515,7 @@ class _OrdersPageState extends State<OrdersPage> {
                                 color: AppColors.primaryOrange.withValues(alpha: 0.12),
                                 shape: BoxShape.circle,
                               ),
-                              child: const Icon(
+                              child: Icon(
                                 LucideIcons.receiptText,
                                 color: AppColors.primaryOrange,
                                 size: 44,
@@ -578,7 +578,7 @@ class _OrdersPageState extends State<OrdersPage> {
                                             color: AppColors.primaryOrange.withValues(alpha: 0.1),
                                             borderRadius: BorderRadius.circular(10),
                                           ),
-                                          child: const Icon(
+                                          child: Icon(
                                             LucideIcons.receipt,
                                             color: AppColors.primaryOrange,
                                             size: 18,

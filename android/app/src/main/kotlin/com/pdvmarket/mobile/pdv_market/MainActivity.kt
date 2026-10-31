@@ -1,5 +1,6 @@
 package com.pdvmarket.mobile.pdv_market
 
-import io.flutter.embedding.android.FlutterActivity
+import io.flutter.embedding.android.FlutterFragmentActivity
 
-class MainActivity : FlutterActivity()
+// FragmentActivity é exigida pelo local_auth (biometria do "Lembrar de mim").
+class MainActivity : FlutterFragmentActivity()

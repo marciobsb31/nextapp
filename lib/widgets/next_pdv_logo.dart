@@ -135,7 +135,7 @@ class NextPdvLogo extends StatelessWidget {
             top: 0,
             child: Transform.rotate(
               angle: 0.78,
-              child: const Icon(
+              child: Icon(
                 LucideIcons.arrowUpRight,
                 size: 28,
                 color: AppColors.primaryOrange,
@@ -226,7 +226,7 @@ class NextPdvInlineBrand extends StatelessWidget {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(LucideIcons.building2, size: 12, color: AppColors.primaryOrange),
+                Icon(LucideIcons.building2, size: 12, color: AppColors.primaryOrange),
                 const SizedBox(width: 4),
                 Text(
                   lojaNome!,

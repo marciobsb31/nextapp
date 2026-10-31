@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../controllers/cart_controller.dart';
+import '../../core/sessao/sessao.dart';
 import '../../models/cart_item.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/gradient_button.dart';
@@ -12,11 +13,13 @@ import '../payment/payment_flow.dart';
 class CartPage extends StatelessWidget {
   final CartController cartController;
   final VoidCallback onBackToShop;
+  final Sessao? sessao;
 
   const CartPage({
     super.key,
     required this.cartController,
     required this.onBackToShop,
+    this.sessao,
   });
 
   void _proceedToCheckout(BuildContext context) {
@@ -26,6 +29,7 @@ class CartPage extends StatelessWidget {
       MaterialPageRoute(
         builder: (context) => PaymentFlow(
           cartController: cartController,
+          sessao: sessao,
           onFinishFlow: () {
             cartController.clearCart();
             Navigator.popUntil(context, (route) => route.isFirst);
@@ -111,7 +115,7 @@ class CartPage extends StatelessWidget {
                         shape: BoxShape.circle,
                         boxShadow: AppColors.cardShadow,
                       ),
-                      child: const Icon(
+                      child: Icon(
                         LucideIcons.shoppingBag,
                         color: AppColors.primaryOrange,
                         size: 64,

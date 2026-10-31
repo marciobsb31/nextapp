@@ -355,7 +355,7 @@ class _ProfilePageState extends State<ProfilePage> {
                                 right: 0,
                                 child: Container(
                                   padding: const EdgeInsets.all(6),
-                                  decoration: const BoxDecoration(
+                                  decoration: BoxDecoration(
                                     color: AppColors.primaryOrange,
                                     shape: BoxShape.circle,
                                   ),
@@ -374,7 +374,7 @@ class _ProfilePageState extends State<ProfilePage> {
                     const SizedBox(height: 6),
                     TextButton.icon(
                       onPressed: _abrirModalTrocaFoto,
-                      icon: const Icon(
+                      icon: Icon(
                         LucideIcons.camera,
                         size: 14,
                         color: AppColors.primaryOrange,
@@ -422,7 +422,7 @@ class _ProfilePageState extends State<ProfilePage> {
                           Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              const Icon(
+                              Icon(
                                 LucideIcons.building2,
                                 color: AppColors.primaryOrange,
                                 size: 16,
@@ -566,7 +566,7 @@ class _ProfilePageState extends State<ProfilePage> {
                           ),
                           borderRadius: BorderRadius.circular(12),
                         ),
-                        child: const Icon(
+                        child: Icon(
                           LucideIcons.creditCard,
                           color: AppColors.primaryOrange,
                           size: 20,
@@ -624,14 +624,14 @@ class _ProfilePageState extends State<ProfilePage> {
                           height: 44,
                           child: OutlinedButton.icon(
                             style: OutlinedButton.styleFrom(
-                              side: const BorderSide(
+                              side: BorderSide(
                                 color: AppColors.primaryOrange,
                               ),
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(14),
                               ),
                             ),
-                            icon: const Icon(
+                            icon: Icon(
                               LucideIcons.plus,
                               size: 16,
                               color: AppColors.primaryOrange,
@@ -787,7 +787,7 @@ class _ProfilePageState extends State<ProfilePage> {
                     child: Column(
                       children: [
                         ListTile(
-                          leading: const Icon(
+                          leading: Icon(
                             LucideIcons.helpCircle,
                             color: AppColors.primaryOrange,
                           ),
