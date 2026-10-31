@@ -155,7 +155,7 @@ class _CuponsPageState extends ConsumerState<CuponsPage> {
             if (_carregando) const LinearProgressIndicator(),
             if (_aviso != null) AvisoAnimado(texto: _aviso!, erro: true),
             if (!_carregando && _aviso == null && lista.isEmpty)
-              const Padding(
+              Padding(
                 padding: EdgeInsets.only(top: 48),
                 child: Column(
                   children: [
@@ -170,7 +170,9 @@ class _CuponsPageState extends ConsumerState<CuponsPage> {
                 padding: const EdgeInsets.only(bottom: 10),
                 child: Material(
                   color: Colors.white,
-                  borderRadius: BorderRadius.circular(20),
+                  borderRadius: BorderRadius.circular(Cores.raio),
+                  elevation: 2,
+                  shadowColor: Colors.black.withValues(alpha: 0.25),
                   child: ListTile(
                     title: Text(texto(item['codigo']), style: const TextStyle(fontWeight: FontWeight.w800)),
                     subtitle: Column(
@@ -189,7 +191,7 @@ class _CuponsPageState extends ConsumerState<CuponsPage> {
                               ),
                               child: Text(
                                 item['usoUnico'] == true ? (item['usado'] == true ? 'Já usado' : 'Uso único') : 'Várias vezes',
-                                style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Cores.laranja),
+                                style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Cores.laranja),
                               ),
                             ),
                           ],
@@ -197,7 +199,7 @@ class _CuponsPageState extends ConsumerState<CuponsPage> {
                       ],
                     ),
                     isThreeLine: true,
-                    trailing: const Icon(Icons.chevron_right, color: Cores.laranja),
+                    trailing: Icon(Icons.chevron_right, color: Cores.laranja),
                     onTap: () => _abrir(item),
                   ),
                 ),

@@ -114,7 +114,7 @@ class _FornecedoresPageState extends ConsumerState<FornecedoresPage> {
             if (_carregando) const LinearProgressIndicator(),
             if (_aviso != null) AvisoAnimado(texto: _aviso!, erro: true),
             if (!_carregando && _aviso == null && lista.isEmpty)
-              const Padding(
+              Padding(
                 padding: EdgeInsets.only(top: 48),
                 child: Column(
                   children: [
@@ -129,9 +129,11 @@ class _FornecedoresPageState extends ConsumerState<FornecedoresPage> {
                 padding: const EdgeInsets.only(top: 10),
                 child: Material(
                   color: Colors.white,
-                  borderRadius: BorderRadius.circular(20),
+                  borderRadius: BorderRadius.circular(Cores.raio),
+                  elevation: 2,
+                  shadowColor: Colors.black.withValues(alpha: 0.25),
                   child: ListTile(
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(Cores.raio)),
                     title: Text(texto(item['nomeMarca']), style: const TextStyle(fontWeight: FontWeight.w800)),
                     subtitle: Text(
                       [
@@ -140,7 +142,7 @@ class _FornecedoresPageState extends ConsumerState<FornecedoresPage> {
                         [texto(item['cidade']), texto(item['estado'])].where((parte) => parte.isNotEmpty).join('-'),
                       ].where((parte) => parte.isNotEmpty).join('\n'),
                     ),
-                    trailing: const Icon(Icons.chevron_right, color: Cores.laranja),
+                    trailing: Icon(Icons.chevron_right, color: Cores.laranja),
                     onTap: () => _abrir(item),
                   ),
                 ),

@@ -9,6 +9,10 @@ void main() {
     expect(qr.contrato, 'tenant_1');
     expect(qr.id, 7);
     expect(QrEquipamento.ler('https://pdv.exemplo.com.br/geladeira/tenant_x/12/')!.id, 12);
+    final link = QrEquipamento.ler('nextpdv://geladeira/tenant_1/7')!;
+    expect(link.geladeira, isTrue);
+    expect(link.contrato, 'tenant_1');
+    expect(QrEquipamento.ler('outroapp://geladeira/tenant_1/7'), isNull);
   });
 
   test('QR do painel e formatos antigos são aparelhos do Smart Access', () {

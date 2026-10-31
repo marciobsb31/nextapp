@@ -22,17 +22,34 @@ class AcessoLembrado {
 
   static const _chaveLembrar = 'pdv_market_lembrar';
   static const _chaveEmail = 'pdv_market_email_lembrado';
+  static const _chaveBiometriaOferecida = 'pdv_market_biometria_oferecida';
 
   final CofreSessao _cofre;
   final FlutterSecureStorage _caixa;
   final LocalAuthentication _digital;
 
+  /// No celular o padrão é lembrar; só fica desmarcado se a pessoa desmarcou da última vez.
   Future<bool> lembrarMarcado() async {
     try {
-      return await _caixa.read(key: _chaveLembrar) == 'sim';
+      return await _caixa.read(key: _chaveLembrar) != 'nao';
     } catch (_) {
       return false;
     }
+  }
+
+  /// A pergunta "usar a digital da próxima vez?" aparece uma vez por aparelho.
+  Future<bool> biometriaJaOferecida() async {
+    try {
+      return await _caixa.read(key: _chaveBiometriaOferecida) == 'sim';
+    } catch (_) {
+      return true;
+    }
+  }
+
+  Future<void> marcarBiometriaOferecida() async {
+    try {
+      await _caixa.write(key: _chaveBiometriaOferecida, value: 'sim');
+    } catch (_) {}
   }
 
   Future<String> emailLembrado() async {
@@ -51,7 +68,7 @@ class AcessoLembrado {
         await _caixa.write(key: _chaveEmail, value: sessao.email);
       } else {
         await _cofre.limpar();
-        await _caixa.delete(key: _chaveLembrar);
+        await _caixa.write(key: _chaveLembrar, value: 'nao');
         await _caixa.delete(key: _chaveEmail);
       }
     } catch (_) {}
@@ -59,7 +76,7 @@ class AcessoLembrado {
 
   Future<Sessao?> sessaoGuardada() async {
     try {
-      if (!await lembrarMarcado()) return null;
+      if (await _caixa.read(key: _chaveLembrar) != 'sim') return null;
       final sessao = await _cofre.ler();
       return sessao != null && sessao.autenticada ? sessao : null;
     } catch (_) {

@@ -379,7 +379,7 @@ class _InicioPageState extends ConsumerState<InicioPage> {
                 primeiro.isEmpty ? 'Olá' : 'Olá, $primeiro',
                 style: const TextStyle(color: Cores.tinta),
               ),
-              const Text(
+              Text(
                 'PDV Market',
                 style: TextStyle(
                   color: Cores.laranja,
@@ -536,7 +536,7 @@ class _InicioPageState extends ConsumerState<InicioPage> {
                   width: double.infinity,
                   height: 220,
                   child: urlMidia(produto.imagemUrl) == null
-                      ? const ColoredBox(
+                      ? ColoredBox(
                           color: Color(0xFFFFF1E8),
                           child: Icon(
                             Icons.shopping_bag_outlined,
@@ -547,7 +547,7 @@ class _InicioPageState extends ConsumerState<InicioPage> {
                       : Image.network(
                           urlMidia(produto.imagemUrl)!,
                           fit: BoxFit.cover,
-                          errorBuilder: (_, _, _) => const ColoredBox(
+                          errorBuilder: (_, _, _) => ColoredBox(
                             color: Color(0xFFFFF1E8),
                             child: Icon(
                               Icons.shopping_bag_outlined,
@@ -745,7 +745,7 @@ class _InicioPageState extends ConsumerState<InicioPage> {
                   width: 58,
                   height: 58,
                   decoration: BoxDecoration(
-                    color: ativa ? Cores.laranja : const Color(0xFFFFE8D6),
+                    color: ativa ? Cores.laranja : Cores.suave,
                     shape: BoxShape.circle,
                   ),
                   child: Icon(
@@ -815,7 +815,7 @@ class _InicioPageState extends ConsumerState<InicioPage> {
               borderRadius: BorderRadius.circular(20),
             ),
             leading: CircleAvatar(
-              backgroundColor: const Color(0xFFFFE8D6),
+              backgroundColor: Cores.suave,
               child: Icon(
                 _iconeCategoria(categoria.nome),
                 color: Cores.laranjaEscuro,
@@ -856,7 +856,7 @@ class _InicioPageState extends ConsumerState<InicioPage> {
         const SizedBox(width: 8),
         Text(
           '$_total',
-          style: const TextStyle(
+          style: TextStyle(
             color: Cores.laranja,
             fontWeight: FontWeight.w700,
           ),
@@ -1001,7 +1001,7 @@ class _InicioPageState extends ConsumerState<InicioPage> {
         child: Container(
           width: 54,
           height: 54,
-          decoration: const BoxDecoration(
+          decoration: BoxDecoration(
             color: Cores.laranja,
             shape: BoxShape.circle,
           ),
@@ -1055,7 +1055,7 @@ class _InicioPageState extends ConsumerState<InicioPage> {
                   right: 6,
                   child: Container(
                     padding: const EdgeInsets.all(4),
-                    decoration: const BoxDecoration(
+                    decoration: BoxDecoration(
                       color: Cores.laranja,
                       shape: BoxShape.circle,
                     ),
@@ -1143,7 +1143,7 @@ class _CardProduto extends StatelessWidget {
                     borderRadius: BorderRadius.circular(14),
                   ),
                   child: imagem == null
-                      ? const Icon(
+                      ? Icon(
                           Icons.shopping_bag_outlined,
                           color: Cores.laranja,
                           size: 30,
@@ -1151,7 +1151,7 @@ class _CardProduto extends StatelessWidget {
                       : Image.network(
                           imagem,
                           fit: BoxFit.cover,
-                          errorBuilder: (_, _, _) => const Icon(
+                          errorBuilder: (_, _, _) => Icon(
                             Icons.shopping_bag_outlined,
                             color: Cores.laranja,
                           ),
@@ -1160,7 +1160,7 @@ class _CardProduto extends StatelessWidget {
               ),
               const SizedBox(height: 8),
               if (produto.emOferta)
-                const Text(
+                Text(
                   'OFERTA',
                   style: TextStyle(
                     color: Cores.laranja,
@@ -1220,7 +1220,7 @@ class _CardProduto extends StatelessWidget {
                       width: 30,
                       height: 30,
                       alignment: Alignment.center,
-                      decoration: const BoxDecoration(
+                      decoration: BoxDecoration(
                         color: Cores.laranja,
                         shape: BoxShape.circle,
                       ),

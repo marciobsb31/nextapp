@@ -67,6 +67,15 @@ class AppColors {
 }
 
 class AppTheme {
+  static TextTheme _poppins(TextTheme base, {required Color titulo, required Color corpo, required Color apoio}) {
+    return base.copyWith(
+      headlineMedium: base.headlineMedium?.merge(TextStyle(color: titulo, fontWeight: FontWeight.bold)),
+      titleLarge: base.titleLarge?.merge(TextStyle(color: titulo, fontWeight: FontWeight.w600)),
+      bodyLarge: base.bodyLarge?.merge(TextStyle(color: corpo)),
+      bodyMedium: base.bodyMedium?.merge(TextStyle(color: apoio)),
+    );
+  }
+
   static ThemeData get lightTheme {
     return ThemeData(
       useMaterial3: true,
@@ -77,17 +86,12 @@ class AppTheme {
         secondary: AppColors.navyDark,
         surface: AppColors.cardSurface,
       ),
-      textTheme: GoogleFonts.poppinsTextTheme().copyWith(
-        headlineMedium: const TextStyle(
-          color: AppColors.navyDark,
-          fontWeight: FontWeight.bold,
-        ),
-        titleLarge: const TextStyle(
-          color: AppColors.navyDark,
-          fontWeight: FontWeight.w600,
-        ),
-        bodyLarge: const TextStyle(color: AppColors.textPrimary),
-        bodyMedium: const TextStyle(color: AppColors.textSecondary),
+      // `merge` mantém a Poppins; um TextStyle novo no copyWith apagaria a fonte do corpo.
+      textTheme: _poppins(
+        GoogleFonts.poppinsTextTheme(),
+        titulo: AppColors.navyDark,
+        corpo: AppColors.textPrimary,
+        apoio: AppColors.textSecondary,
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
@@ -132,17 +136,11 @@ class AppTheme {
         secondary: const Color(0xFF38BDF8),
         surface: AppColors.cardSurfaceDark,
       ),
-      textTheme: GoogleFonts.poppinsTextTheme(ThemeData.dark().textTheme).copyWith(
-        headlineMedium: const TextStyle(
-          color: AppColors.textPrimaryDark,
-          fontWeight: FontWeight.bold,
-        ),
-        titleLarge: const TextStyle(
-          color: AppColors.textPrimaryDark,
-          fontWeight: FontWeight.w600,
-        ),
-        bodyLarge: const TextStyle(color: AppColors.textPrimaryDark),
-        bodyMedium: const TextStyle(color: AppColors.textSecondaryDark),
+      textTheme: _poppins(
+        GoogleFonts.poppinsTextTheme(ThemeData.dark().textTheme),
+        titulo: AppColors.textPrimaryDark,
+        corpo: AppColors.textPrimaryDark,
+        apoio: AppColors.textSecondaryDark,
       ),
       cardTheme: CardThemeData(
         color: AppColors.cardSurfaceDark,

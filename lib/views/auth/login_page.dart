@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
@@ -7,7 +9,9 @@ import '../../core/rede/api.dart';
 import '../../core/rede/falha_api.dart';
 import '../../core/sessao/acesso_lembrado.dart';
 import '../../core/sessao/sessao.dart';
+import '../../core/util/link_entrada.dart';
 import '../../theme/app_theme.dart';
+import '../../theme/tema_loja.dart';
 import '../../widgets/curved_header.dart';
 import '../../widgets/gradient_button.dart';
 import '../../widgets/logo_animada.dart';
@@ -36,9 +40,17 @@ class _LoginPageState extends State<LoginPage> {
   bool _obscurePassword = true;
   bool _isLoading = false;
   bool _isGoogleLoading = false;
-  bool _lembrar = false;
+  bool _lembrar = true;
   bool _biometriaPronta = false;
   String? _errorMessage;
+
+  /// Erros de preenchimento aparecem embaixo do próprio campo.
+  String? _erroEmail;
+  String? _erroSenha;
+
+  /// Cadastro ainda não confirmado: oferece reenviar o link.
+  bool _podeReenviar = false;
+  bool _reenviando = false;
 
   @override
   void initState() {
@@ -59,16 +71,64 @@ class _LoginPageState extends State<LoginPage> {
     });
   }
 
-  Future<void> _concluirEntrada(Sessao sessao) async {
+  Future<void> _concluirEntrada(Sessao sessao, {bool comSenha = false}) async {
+    if (comSenha) {
+      // Avisa o gerenciador de senhas do celular que o login deu certo (oferece salvar).
+      TextInput.finishAutofillContext();
+      await _oferecerBiometria();
+    }
     await _acesso.aposEntrar(sessao, lembrar: _lembrar);
     widget.authController.entrarComSessao(sessao);
     if (mounted) widget.onLoginSuccess();
   }
 
+  /// Depois do primeiro login com senha, pergunta uma vez se a pessoa quer usar a digital.
+  Future<void> _oferecerBiometria() async {
+    if (_biometriaPronta || !mounted) return;
+    if (await _acesso.biometriaJaOferecida() || !await _acesso.biometriaDisponivel()) return;
+    await _acesso.marcarBiometriaOferecida();
+    if (!mounted) return;
+    final usar = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        icon: Icon(LucideIcons.fingerprint, color: AppColors.primaryOrange, size: 36),
+        title: const Text('Entrar com a digital?'),
+        content: const Text('Na próxima vez, você entra só com a digital, sem digitar a senha.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Agora não')),
+          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Usar a digital')),
+        ],
+      ),
+    );
+    if (usar == true) _lembrar = true;
+  }
+
+  Future<void> _reenviarConfirmacao() async {
+    final email = _emailController.text.trim();
+    if (email.isEmpty) return;
+    setState(() => _reenviando = true);
+    try {
+      await ApiPdv.padrao().reenviarAviso(email);
+      if (!mounted) return;
+      setState(() {
+        _podeReenviar = false;
+        _errorMessage = null;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Se o cadastro existir, o link de confirmação chega em $email em instantes.'),
+        behavior: SnackBarBehavior.floating,
+      ));
+    } catch (erro) {
+      if (mounted) setState(() => _errorMessage = falhaDe(erro).mensagem);
+    } finally {
+      if (mounted) setState(() => _reenviando = false);
+    }
+  }
+
   String _mensagemDe(FalhaApi falha) {
     switch (falha.codigo) {
       case 'EMAIL_NAO_CONFIRMADO':
-        return 'Confirme o cadastro pelo link enviado ao seu e-mail antes de entrar.';
+        return 'Seu cadastro ainda não foi confirmado. Abra o link que enviamos para o seu e-mail.';
       case 'ACESSO_INATIVO':
         return 'Este acesso está inativo. Solicite a reativação à administração.';
       case 'CONTRATO_SUSPENSO':
@@ -85,47 +145,31 @@ class _LoginPageState extends State<LoginPage> {
     super.dispose();
   }
 
-  void _handleLogin() async {
-    setState(() => _errorMessage = null);
+  static final _formatoEmail = RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$');
 
+  void _handleLogin() async {
     final email = _emailController.text.trim();
     final password = _passwordController.text;
 
-    // 1. Validação estrita de campos de entrada
-    if (email.isEmpty) {
-      setState(
-        () => _errorMessage = 'Por favor, informe seu e-mail ou condomínio.',
-      );
-      return;
-    }
-
-    if (!email.contains('@') || !email.contains('.')) {
-      setState(
-        () => _errorMessage =
-            'Informe um e-mail válido (ex: morador@condominio.com.br).',
-      );
-      return;
-    }
-
-    if (password.isEmpty) {
-      setState(() => _errorMessage = 'Por favor, digite sua senha de acesso.');
-      return;
-    }
-
-    if (password.length < 6) {
-      setState(
-        () => _errorMessage =
-            'A senha de acesso deve ter no mínimo 6 caracteres.',
-      );
+    // Só o preenchimento é conferido aqui; a regra da senha é do servidor.
+    setState(() {
+      _errorMessage = null;
+      _podeReenviar = false;
+      _erroEmail = email.isEmpty
+          ? 'Informe seu e-mail.'
+          : !_formatoEmail.hasMatch(email)
+              ? 'Confira o e-mail (ex.: nome@email.com).'
+              : null;
+      _erroSenha = password.isEmpty ? 'Informe sua senha.' : null;
+    });
+    if (_erroEmail != null || _erroSenha != null) {
+      HapticFeedback.mediumImpact();
       return;
     }
 
     setState(() => _isLoading = true);
-
-    // 2. Validação e tentativa de login na API
     try {
-      final api = ApiPdv.padrao();
-      final sessao = await api.entrar(email, password);
+      final sessao = await ApiPdv.padrao().entrar(email, password);
 
       final isMenor =
           email.toLowerCase().contains('menor') ||
@@ -134,14 +178,19 @@ class _LoginPageState extends State<LoginPage> {
       widget.authController.setMaior18(!isMenor);
 
       if (mounted) setState(() => _isLoading = false);
-      await _concluirEntrada(sessao);
-      return;
+      await _concluirEntrada(sessao, comSenha: true);
     } catch (erro) {
       final falha = falhaDe(erro);
+      HapticFeedback.heavyImpact();
       if (mounted) {
         setState(() {
           _isLoading = false;
-          _errorMessage = _mensagemDe(falha);
+          _podeReenviar = falha.codigo == 'EMAIL_NAO_CONFIRMADO';
+          if (falha.status == 401 && falha.codigo != 'EMAIL_NAO_CONFIRMADO') {
+            _erroSenha = 'E-mail ou senha não conferem.';
+          } else {
+            _errorMessage = _mensagemDe(falha);
+          }
         });
       }
     }
@@ -225,7 +274,7 @@ class _LoginPageState extends State<LoginPage> {
                         crossAxisAlignment: CrossAxisAlignment.center,
                         children: [
                           Text(
-                            'Recuperação de Senha',
+                            'Recuperar senha',
                             style: GoogleFonts.poppins(
                               fontSize: 20,
                               fontWeight: FontWeight.w800,
@@ -278,8 +327,8 @@ class _LoginPageState extends State<LoginPage> {
                             controller: emailRecupController,
                             keyboardType: TextInputType.emailAddress,
                             decoration: const InputDecoration(
-                              labelText: 'E-mail Cadastrado',
-                              hintText: 'seu.email@exemplo.com',
+                              labelText: 'E-mail cadastrado',
+                              hintText: 'seu@email.com',
                               prefixIcon: Icon(
                                 LucideIcons.mail,
                                 size: 20,
@@ -351,7 +400,7 @@ class _LoginPageState extends State<LoginPage> {
                                         ),
                                         const SizedBox(width: 10),
                                         Text(
-                                          'Enviar Link de Recuperação',
+                                          'Enviar link',
                                           style: GoogleFonts.poppins(
                                             fontSize: 14.5,
                                             fontWeight: FontWeight.w700,
@@ -485,390 +534,252 @@ class _LoginPageState extends State<LoginPage> {
     }
   }
 
+  void _abrirCadastro() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => RegisterPage(
+          authController: widget.authController,
+          onRegisterSuccess: widget.onLoginSuccess,
+        ),
+      ),
+    );
+  }
+
+  TextStyle _rotulo(bool isDark) => GoogleFonts.poppins(
+        fontSize: 14,
+        fontWeight: FontWeight.w600,
+        color: isDark ? Colors.white70 : AppColors.navyDark,
+      );
+
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    // Com o teclado aberto o cabeçalho encolhe e o botão Entrar continua à vista.
+    final tecladoAberto = MediaQuery.viewInsetsOf(context).bottom > 0;
+    final apoio = isDark ? AppColors.textSecondaryDark : AppColors.textSecondary;
 
     return Scaffold(
-      backgroundColor: isDark
-          ? AppColors.backgroundDark
-          : AppColors.backgroundLight,
+      backgroundColor: isDark ? AppColors.backgroundDark : AppColors.backgroundLight,
       body: SingleChildScrollView(
         child: Column(
           children: [
-            // ==========================================
-            // HEADER CURVADO SUPERIOR COM A LOGO (Inspiração Tela 02)
-            // ==========================================
-            CurvedAuthHeader(
-              height: 220,
-              child: SafeArea(
-                bottom: false,
-                child: Center(
-                  child: const Padding(
-                    padding: EdgeInsets.only(bottom: 8),
-                    child: LogoAnimada(largura: 190),
+            AnimatedSize(
+              duration: const Duration(milliseconds: 220),
+              curve: Curves.easeOutCubic,
+              child: CurvedAuthHeader(
+                height: tecladoAberto ? 120 : 230,
+                child: SafeArea(
+                  bottom: false,
+                  child: Center(
+                    child: Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: LogoAnimada(largura: tecladoAberto ? 110 : 170),
+                    ),
                   ),
                 ),
               ),
             ),
-
-            // ==========================================
-            // CORPO DO FORMULÁRIO (Inspiração Tela 02)
-            // ==========================================
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 4),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Acessar Conta',
-                    style: GoogleFonts.poppins(
-                      fontSize: 22,
-                      fontWeight: FontWeight.w800,
-                      color: isDark ? Colors.white : AppColors.navyDark,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Insira suas credenciais para continuar',
-                    style: GoogleFonts.poppins(
-                      fontSize: 13,
-                      color: isDark
-                          ? AppColors.textSecondaryDark
-                          : AppColors.textSecondary,
-                    ),
-                  ),
-                  const SizedBox(height: 22),
-
-                  if (_errorMessage != null)
-                    Container(
-                      margin: const EdgeInsets.only(bottom: 16),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 14,
-                        vertical: 11,
-                      ),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFFFEBEE),
-                        borderRadius: BorderRadius.circular(14),
-                        border: Border.all(color: const Color(0xFFFFCDD2)),
-                      ),
-                      child: Row(
-                        children: [
-                          const Icon(
-                            LucideIcons.alertCircle,
-                            color: Color(0xFFC62828),
-                            size: 18,
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Text(
-                              _errorMessage!,
-                              style: GoogleFonts.poppins(
-                                color: const Color(0xFFB71C1C),
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-
-                  // Campo E-mail com Ícone de Envelope
-                  Text(
-                    'E-mail',
-                    style: GoogleFonts.poppins(
-                      fontSize: 12.5,
-                      fontWeight: FontWeight.w600,
-                      color: isDark ? Colors.white70 : AppColors.navyDark,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  TextField(
-                    controller: _emailController,
-                    keyboardType: TextInputType.emailAddress,
-                    decoration: const InputDecoration(
-                      hintText: 'cliente@nextpdv.com.br',
-                      prefixIcon: Icon(
-                        LucideIcons.mail,
-                        color: AppColors.textSecondary,
-                        size: 20,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-
-                  // Campo Senha com Ícone de Cadeado e Eye Toggle
-                  Text(
-                    'Senha',
-                    style: GoogleFonts.poppins(
-                      fontSize: 12.5,
-                      fontWeight: FontWeight.w600,
-                      color: isDark ? Colors.white70 : AppColors.navyDark,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  TextField(
-                    controller: _passwordController,
-                    obscureText: _obscurePassword,
-                    decoration: InputDecoration(
-                      hintText: '••••••••••••',
-                      prefixIcon: const Icon(
-                        LucideIcons.lock,
-                        color: AppColors.textSecondary,
-                        size: 20,
-                      ),
-                      suffixIcon: IconButton(
-                        icon: Icon(
-                          _obscurePassword
-                              ? LucideIcons.eyeOff
-                              : LucideIcons.eye,
-                          color: AppColors.textSecondary,
-                          size: 20,
-                        ),
-                        onPressed: () => setState(
-                          () => _obscurePassword = !_obscurePassword,
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-
-                  // Lembrar de mim à esquerda, Esqueceu a senha? à direita
-                  Row(
+              child: ListenableBuilder(
+                listenable: LinkEntrada.instancia,
+                builder: (context, _) {
+                  final veioDaGeladeira = LinkEntrada.instancia.geladeira != null;
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Expanded(
-                        child: InkWell(
-                          borderRadius: BorderRadius.circular(10),
-                          onTap: () => setState(() => _lembrar = !_lembrar),
-                          child: Row(
-                            children: [
-                              SizedBox(
-                                width: 32,
-                                height: 32,
-                                child: Checkbox(
-                                  value: _lembrar,
-                                  activeColor: AppColors.primaryOrange,
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(5)),
-                                  onChanged: (valor) => setState(() => _lembrar = valor ?? false),
-                                ),
-                              ),
-                              const SizedBox(width: 4),
-                              Flexible(
-                                child: Text(
-                                  'Lembrar de mim',
-                                  style: GoogleFonts.poppins(
-                                    fontSize: 12.5,
-                                    fontWeight: FontWeight.w600,
-                                    color: isDark ? Colors.white70 : AppColors.navyDark,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                      TextButton(
-                      onPressed: _handleEsqueceuSenha,
-                      style: TextButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 4,
-                          vertical: 4,
-                        ),
-                      ),
-                      child: Text(
-                        'Esqueceu a senha?',
+                      const SizedBox(height: 14),
+                      Text(
+                        'Entrar',
                         style: GoogleFonts.poppins(
-                          fontSize: 12.5,
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.primaryOrange,
+                          fontSize: 24,
+                          fontWeight: FontWeight.w700,
+                          color: isDark ? Colors.white : AppColors.navyDark,
                         ),
                       ),
-                    ),
-                    ],
-                  ),
-                  const SizedBox(height: 14),
-
-                  // Botão Primário Laranja "Entrar"
-                  GradientButton(
-                    text: 'Entrar',
-                    isLoading: _isLoading,
-                    onPressed: _handleLogin,
-                  ),
-                  const SizedBox(height: 18),
-
-                  // Divisor OU (Conforme Inspiração)
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Divider(
-                          color: isDark
-                              ? AppColors.borderDark
-                              : Colors.grey.shade300,
-                          thickness: 1,
-                        ),
+                      const SizedBox(height: 2),
+                      Text(
+                        veioDaGeladeira
+                            ? 'Entre ou crie sua conta para comprar na geladeira.'
+                            : 'Use sua conta Google ou seu e-mail e senha.',
+                        style: GoogleFonts.poppins(fontSize: 13.5, color: apoio),
                       ),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 14),
-                        child: Text(
-                          'OU',
-                          style: GoogleFonts.poppins(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            color: isDark
-                                ? AppColors.textSecondaryDark
-                                : AppColors.textSecondary,
-                          ),
-                        ),
-                      ),
-                      Expanded(
-                        child: Divider(
-                          color: isDark
-                              ? AppColors.borderDark
-                              : Colors.grey.shade300,
-                          thickness: 1,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 18),
+                      if (veioDaGeladeira) ...[
+                        const SizedBox(height: 14),
+                        _avisoGeladeira(isDark),
+                      ],
+                      const SizedBox(height: 20),
 
-                  // ==========================================
-                  // BOTÃO DO GOOGLE (DESCIDO CONFORME INSPIRAÇÃO!)
-                  // ==========================================
-                  InkWell(
-                    onTap: _isGoogleLoading ? null : _handleGoogleLogin,
-                    borderRadius: BorderRadius.circular(16),
-                    child: Container(
-                      width: double.infinity,
-                      height: 52,
-                      decoration: BoxDecoration(
-                        color: isDark
-                            ? AppColors.cardSurfaceDarkSecondary
-                            : Colors.white,
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(
-                          color: isDark
-                              ? AppColors.borderDark
-                              : Colors.grey.shade300,
-                          width: 1.2,
-                        ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.04),
-                            blurRadius: 10,
-                            offset: const Offset(0, 3),
-                          ),
-                        ],
-                      ),
-                      child: _isGoogleLoading
-                          ? const Center(
-                              child: SizedBox(
-                                width: 22,
-                                height: 22,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2.2,
-                                  color: Color(0xFF4285F4),
-                                ),
-                              ),
-                            )
-                          : Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                _buildGoogleIcon(),
-                                const SizedBox(width: 12),
-                                Text(
-                                  'Entrar com Google',
-                                  style: GoogleFonts.poppins(
-                                    fontSize: 14.5,
-                                    fontWeight: FontWeight.w700,
-                                    color: isDark
-                                        ? Colors.white
-                                        : AppColors.navyDark,
-                                  ),
-                                ),
-                              ],
-                            ),
-                    ),
-                  ),
+                      if (_errorMessage != null) _avisoErro(),
 
-                  const SizedBox(height: 20),
+                      _botaoGoogle(isDark),
+                      const SizedBox(height: 18),
+                      _divisor('ou com e-mail', isDark),
+                      const SizedBox(height: 18),
 
-                  // Biometria: aparece só com sessão lembrada neste aparelho
-                  if (_biometriaPronta) Center(
-                    child: InkWell(
-                      onTap: _handleBiometrics,
-                      borderRadius: BorderRadius.circular(20),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 6,
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
+                      AutofillGroup(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Icon(
-                              LucideIcons.fingerprint,
-                              size: 20,
-                              color: AppColors.primaryOrange,
+                            Text('E-mail', style: _rotulo(isDark)),
+                            const SizedBox(height: 6),
+                            TextField(
+                              controller: _emailController,
+                              keyboardType: TextInputType.emailAddress,
+                              textInputAction: TextInputAction.next,
+                              autofillHints: const [AutofillHints.email, AutofillHints.username],
+                              autocorrect: false,
+                              enableSuggestions: false,
+                              textCapitalization: TextCapitalization.none,
+                              onChanged: (_) {
+                                if (_erroEmail != null) setState(() => _erroEmail = null);
+                              },
+                              decoration: InputDecoration(
+                                hintText: 'seu@email.com',
+                                errorText: _erroEmail,
+                                prefixIcon: const Icon(LucideIcons.mail, color: AppColors.textSecondary, size: 20),
+                              ),
                             ),
-                            const SizedBox(width: 6),
-                            Text(
-                              'Entrar com Biometria',
-                              style: GoogleFonts.poppins(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                                color: isDark
-                                    ? Colors.white70
-                                    : AppColors.navyDark,
+                            const SizedBox(height: 16),
+                            Text('Senha', style: _rotulo(isDark)),
+                            const SizedBox(height: 6),
+                            TextField(
+                              controller: _passwordController,
+                              obscureText: _obscurePassword,
+                              textInputAction: TextInputAction.done,
+                              autofillHints: const [AutofillHints.password],
+                              autocorrect: false,
+                              enableSuggestions: false,
+                              onChanged: (_) {
+                                if (_erroSenha != null) setState(() => _erroSenha = null);
+                              },
+                              onSubmitted: (_) {
+                                if (!_isLoading) _handleLogin();
+                              },
+                              decoration: InputDecoration(
+                                errorText: _erroSenha,
+                                prefixIcon: const Icon(LucideIcons.lock, color: AppColors.textSecondary, size: 20),
+                                suffixIcon: IconButton(
+                                  tooltip: _obscurePassword ? 'Mostrar senha' : 'Esconder senha',
+                                  icon: Icon(
+                                    _obscurePassword ? LucideIcons.eyeOff : LucideIcons.eye,
+                                    color: AppColors.textSecondary,
+                                    size: 20,
+                                  ),
+                                  onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                                ),
                               ),
                             ),
                           ],
                         ),
                       ),
-                    ),
-                  ),
+                      const SizedBox(height: 6),
 
-                  const SizedBox(height: 18),
-
-                  // Link de Rodapé: "Novo por aqui? Cadastre-se"
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(
-                        'Novo por aqui? ',
-                        style: GoogleFonts.poppins(
-                          fontSize: 13,
-                          color: isDark
-                              ? AppColors.textSecondaryDark
-                              : AppColors.textSecondary,
-                        ),
-                      ),
-                      GestureDetector(
-                        onTap: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => RegisterPage(
-                                authController: widget.authController,
-                                onRegisterSuccess: widget.onLoginSuccess,
+                      Row(
+                        children: [
+                          Expanded(
+                            child: InkWell(
+                              borderRadius: BorderRadius.circular(10),
+                              onTap: () => setState(() => _lembrar = !_lembrar),
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(vertical: 6),
+                                child: Row(
+                                  children: [
+                                    SizedBox(
+                                      width: 32,
+                                      height: 32,
+                                      child: Checkbox(
+                                        value: _lembrar,
+                                        activeColor: AppColors.primaryOrange,
+                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(5)),
+                                        onChanged: (valor) => setState(() => _lembrar = valor ?? false),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Flexible(
+                                      child: Text(
+                                        'Manter conectado',
+                                        style: GoogleFonts.poppins(
+                                          fontSize: 13.5,
+                                          fontWeight: FontWeight.w500,
+                                          color: isDark ? Colors.white70 : AppColors.navyDark,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
                             ),
-                          );
-                        },
-                        child: Text(
-                          'Cadastre-se',
-                          style: GoogleFonts.poppins(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w700,
-                            color: AppColors.primaryOrange,
+                          ),
+                          TextButton(
+                            onPressed: _handleEsqueceuSenha,
+                            style: TextButton.styleFrom(minimumSize: const Size(48, 44)),
+                            child: Text(
+                              'Esqueci a senha',
+                              style: GoogleFonts.poppins(
+                                fontSize: 13.5,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.primaryOrange,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 14),
+
+                      GradientButton(
+                        text: _isLoading ? 'Entrando...' : 'Entrar',
+                        isLoading: _isLoading,
+                        onPressed: _isLoading ? null : _handleLogin,
+                      ),
+
+                      if (_biometriaPronta) ...[
+                        const SizedBox(height: 12),
+                        Center(
+                          child: TextButton.icon(
+                            onPressed: _isLoading ? null : _handleBiometrics,
+                            style: TextButton.styleFrom(minimumSize: const Size(48, 44)),
+                            icon: Icon(LucideIcons.fingerprint, size: 20, color: AppColors.primaryOrange),
+                            label: Text(
+                              'Entrar com a digital',
+                              style: GoogleFonts.poppins(
+                                fontSize: 13.5,
+                                fontWeight: FontWeight.w600,
+                                color: isDark ? Colors.white70 : AppColors.navyDark,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+
+                      const SizedBox(height: 24),
+                      _divisor('primeira vez aqui?', isDark),
+                      const SizedBox(height: 14),
+                      SizedBox(
+                        width: double.infinity,
+                        height: 52,
+                        child: OutlinedButton.icon(
+                          onPressed: _abrirCadastro,
+                          icon: Icon(LucideIcons.userPlus, size: 18, color: AppColors.primaryOrange),
+                          label: Text(
+                            'Criar conta',
+                            style: GoogleFonts.poppins(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w700,
+                              color: isDark ? Colors.white : AppColors.navyDark,
+                            ),
+                          ),
+                          style: OutlinedButton.styleFrom(
+                            side: BorderSide(color: AppColors.primaryOrange.withValues(alpha: 0.5), width: 1.4),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
                           ),
                         ),
                       ),
+                      const SizedBox(height: 32),
                     ],
-                  ),
-                  const SizedBox(height: 32),
-                ],
+                  );
+                },
               ),
             ),
           ],
@@ -877,57 +788,143 @@ class _LoginPageState extends State<LoginPage> {
     );
   }
 
-  Widget _buildGoogleIcon() {
+  Widget _avisoGeladeira(bool isDark) {
     return Container(
-      width: 22,
-      height: 22,
-      decoration: const BoxDecoration(shape: BoxShape.circle),
-      child: CustomPaint(painter: _GoogleLogoPainter()),
-    );
-  }
-}
-
-class _GoogleLogoPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final strokeWidth = size.width * 0.19;
-    final arcBounds = Rect.fromLTWH(
-      strokeWidth / 2,
-      strokeWidth / 2,
-      size.width - strokeWidth,
-      size.height - strokeWidth,
-    );
-
-    void drawSegment(Color color, double startAngle, double sweepAngle) {
-      canvas.drawArc(
-        arcBounds,
-        startAngle,
-        sweepAngle,
-        false,
-        Paint()
-          ..color = color
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = strokeWidth
-          ..strokeCap = StrokeCap.butt,
-      );
-    }
-
-    drawSegment(const Color(0xFFEA4335), -1.50, 1.42);
-    drawSegment(const Color(0xFFFBBC05), -0.01, 1.49);
-    drawSegment(const Color(0xFF34A853), 1.56, 1.43);
-    drawSegment(const Color(0xFF4285F4), 3.06, 1.58);
-
-    final center = Offset(size.width / 2, size.height / 2);
-    canvas.drawLine(
-      Offset(center.dx, center.dy),
-      Offset(size.width - strokeWidth / 2, center.dy),
-      Paint()
-        ..color = const Color(0xFF4285F4)
-        ..strokeWidth = strokeWidth
-        ..strokeCap = StrokeCap.butt,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: TemaLoja.instancia.paleta.suave,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.primaryOrange.withValues(alpha: 0.25)),
+      ),
+      child: Row(
+        children: [
+          Icon(LucideIcons.refrigerator, color: AppColors.primaryOrange, size: 26),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              'Você leu o QR de uma geladeira. Assim que entrar, abrimos a compra dela para você.',
+              style: GoogleFonts.poppins(fontSize: 12.5, color: AppColors.navyDark, height: 1.35),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+  Widget _avisoErro() {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.fromLTRB(14, 11, 14, 11),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFEBEE),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFFFCDD2)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Icon(LucideIcons.alertCircle, color: Color(0xFFC62828), size: 18),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  _errorMessage!,
+                  style: GoogleFonts.poppins(color: const Color(0xFFB71C1C), fontSize: 12.5, fontWeight: FontWeight.w600),
+                ),
+              ),
+            ],
+          ),
+          if (_podeReenviar)
+            Padding(
+              padding: const EdgeInsets.only(left: 22),
+              child: TextButton.icon(
+                onPressed: _reenviando ? null : _reenviarConfirmacao,
+                style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 6), minimumSize: const Size(48, 40)),
+                icon: _reenviando
+                    ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                    : const Icon(LucideIcons.mailCheck, size: 16, color: Color(0xFFB71C1C)),
+                label: Text(
+                  'Reenviar link de confirmação',
+                  style: GoogleFonts.poppins(color: const Color(0xFFB71C1C), fontSize: 12.5, fontWeight: FontWeight.w700,
+                      decoration: TextDecoration.underline),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _divisor(String texto, bool isDark) {
+    final linha = Expanded(child: Divider(color: isDark ? AppColors.borderDark : Colors.grey.shade300, thickness: 1));
+    return Row(
+      children: [
+        linha,
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          child: Text(
+            texto,
+            style: GoogleFonts.poppins(
+              fontSize: 12.5,
+              fontWeight: FontWeight.w500,
+              color: isDark ? AppColors.textSecondaryDark : AppColors.textSecondary,
+            ),
+          ),
+        ),
+        linha,
+      ],
+    );
+  }
+
+  Widget _botaoGoogle(bool isDark) {
+    return Semantics(
+      button: true,
+      label: 'Continuar com Google',
+      child: InkWell(
+        onTap: _isGoogleLoading ? null : _handleGoogleLogin,
+        borderRadius: BorderRadius.circular(30),
+        child: Container(
+          width: double.infinity,
+          height: 54,
+          decoration: BoxDecoration(
+            color: isDark ? AppColors.cardSurfaceDarkSecondary : Colors.white,
+            borderRadius: BorderRadius.circular(30),
+            border: Border.all(color: isDark ? AppColors.borderDark : Colors.grey.shade300, width: 1.2),
+            boxShadow: AppColors.cardShadow,
+          ),
+          child: _isGoogleLoading
+              ? const Center(
+                  child: SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2.2, color: Color(0xFF4285F4))),
+                )
+              : Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    _buildGoogleIcon(),
+                    const SizedBox(width: 12),
+                    Text(
+                      'Continuar com Google',
+                      style: GoogleFonts.poppins(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                        color: isDark ? Colors.white : AppColors.navyDark,
+                      ),
+                    ),
+                  ],
+                ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildGoogleIcon() => SvgPicture.string(_logoGoogle, width: 22, height: 22);
 }
+
+/// "G" oficial do Google (quatro cores), para o botão "Continuar com Google".
+const _logoGoogle = '''<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48">
+<path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
+<path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
+<path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
+<path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
+</svg>''';

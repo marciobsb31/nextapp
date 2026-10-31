@@ -1,48 +1,40 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 
+import '../theme/app_theme.dart';
+import '../theme/tema_loja.dart';
+
+/// Tokens das telas de gestão (lojista e administrador).
+///
+/// Vêm do design system do app (`AppColors` / `AppTheme`): a mesma fonte, os mesmos tons
+/// de texto e superfície e a paleta que a loja escolhe no painel web. Trocar a paleta
+/// no painel repinta a gestão junto com o app do cliente.
 abstract final class Cores {
-  static const laranja = Color(0xFFFF6A00);
-  static const laranjaEscuro = Color(0xFFE25300);
-  static const marinho = Color(0xFF14233A);
-  static const tinta = Color(0xFF5C6570);
-  static const fundo = Color(0xFFFFF6F1);
-  static const cartao = Color(0xFFFFFFFF);
-  static const linha = Color(0xFFE7E4E1);
+  static Color get laranja => AppColors.primaryOrange;
+  static Color get laranjaEscuro => TemaLoja.instancia.paleta.primariaEscura;
+  static Color get suave => TemaLoja.instancia.paleta.suave;
+  static const marinho = AppColors.navyDark;
+  static const tinta = AppColors.textSecondary;
+  static Color get fundo => AppColors.backgroundLight;
+  static const cartao = AppColors.cardSurface;
+  static const linha = AppColors.accentBorder;
+  static const sucesso = Color(0xFF059669);
+  static const erro = Color(0xFFDC2626);
+  static const alerta = Color(0xFFD97706);
+
+  /// Cantos dos cartões do app.
+  static const raio = 20.0;
+
+  static List<BoxShadow> get sombra => AppColors.cardShadow;
+  static LinearGradient get gradienteMarca => AppColors.orangeGradient;
+  static List<BoxShadow> get brilhoMarca => AppColors.orangeGlowShadow;
+  static const gradienteMarinho = AppColors.cardNavyGradient;
 }
 
-ThemeData temaPdv() {
-  final texto = GoogleFonts.poppinsTextTheme();
-  return ThemeData(
-    useMaterial3: true,
-    scaffoldBackgroundColor: Cores.fundo,
-    colorScheme: ColorScheme.fromSeed(
-      seedColor: Cores.laranja,
-      primary: Cores.laranja,
-      surface: Cores.cartao,
-    ),
-    textTheme: texto.apply(bodyColor: Cores.marinho, displayColor: Cores.marinho),
-    filledButtonTheme: FilledButtonThemeData(
-      style: FilledButton.styleFrom(
-        backgroundColor: Cores.laranja,
-        foregroundColor: Colors.white,
-        minimumSize: const Size.fromHeight(56),
-        textStyle: texto.titleMedium?.copyWith(fontWeight: FontWeight.w700),
-        shape: const ContinuousRectangleBorder(borderRadius: BorderRadius.all(Radius.circular(28))),
-      ),
-    ),
-    inputDecorationTheme: InputDecorationTheme(
-      filled: true,
-      fillColor: Colors.white,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(16),
-        borderSide: const BorderSide(color: Cores.linha),
-      ),
-      enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(16),
-        borderSide: const BorderSide(color: Cores.linha),
-      ),
-    ),
-  );
-}
+/// Cartão branco padrão do app: cantos de 20 e a sombra suave do design system.
+BoxDecoration cartaoApp({Color? cor}) => BoxDecoration(
+      color: cor ?? Cores.cartao,
+      borderRadius: BorderRadius.circular(Cores.raio),
+      boxShadow: Cores.sombra,
+    );
+
+ThemeData temaPdv() => AppTheme.lightTheme;

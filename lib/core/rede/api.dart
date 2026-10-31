@@ -521,6 +521,56 @@ class ApiPdv {
     }
   }
 
+  // ------------------------------------------------------------ gestão
+  // As telas de administração usam as mesmas rotas do painel web. O contrato vem do token.
+
+  Future<dynamic> gestao(Sessao sessao, String caminho, {Map<String, dynamic>? consulta, int? unidadeId}) async {
+    final resposta = await _enviar(
+      () => _dio.get<dynamic>(
+        caminho,
+        queryParameters: consulta,
+        options: Options(headers: EscopoRequisicao.cabecalhos(sessao, unidadeId: unidadeId)),
+      ),
+    );
+    return resposta.data;
+  }
+
+  Future<dynamic> gestaoEnviar(Sessao sessao, String metodo, String caminho, {Object? corpo, int? unidadeId}) async {
+    final resposta = await _enviar(
+      () => _dio.request<dynamic>(
+        caminho,
+        data: corpo,
+        options: Options(method: metodo, headers: EscopoRequisicao.cabecalhos(sessao, unidadeId: unidadeId)),
+      ),
+    );
+    return resposta.data;
+  }
+
+  /// Foto da nota fiscal: a IA leva alguns segundos, por isso o prazo maior.
+  Future<Map<String, dynamic>> lerNotaPorFoto(Sessao sessao, {required List<int> bytes, required String nomeArquivo}) async {
+    final resposta = await _enviar(
+      () => _dio.post<Map<String, dynamic>>(
+        '/api/compras/nota-foto',
+        data: FormData.fromMap({
+          'arquivo': MultipartFile.fromBytes(
+            bytes,
+            filename: nomeArquivo,
+            // Sem o tipo, o Dio manda octet-stream e o servidor recusa a foto.
+            contentType: DioMediaType.parse(nomeArquivo.toLowerCase().endsWith('.pdf')
+                ? 'application/pdf'
+                : nomeArquivo.toLowerCase().endsWith('.png') ? 'image/png' : 'image/jpeg'),
+          ),
+        }),
+        options: Options(
+          headers: EscopoRequisicao.cabecalhos(sessao),
+          receiveTimeout: const Duration(seconds: 90),
+          sendTimeout: const Duration(seconds: 60),
+        ),
+      ),
+    );
+    return resposta.data ?? {};
+  }
+
   Future<T> _enviar<T>(Future<T> Function() chamada) async {
     try {
       return await chamada();

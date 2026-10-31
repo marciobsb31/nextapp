@@ -184,7 +184,7 @@ class _PedidosLojaState extends ConsumerState<PedidosLoja> {
             AvisoAnimado(texto: _aviso!, erro: true),
           ],
           if (!_carregando && _aviso == null && _itens.isEmpty)
-            const Padding(
+            Padding(
               padding: EdgeInsets.only(top: 48),
               child: Column(
                 children: [
@@ -215,7 +215,7 @@ class _PedidosLojaState extends ConsumerState<PedidosLoja> {
     return Container(
       margin: const EdgeInsets.only(top: 12),
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(22)),
+      decoration: cartaoApp(),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -223,7 +223,7 @@ class _PedidosLojaState extends ConsumerState<PedidosLoja> {
             children: [
               Text(texto(pedido['numero']), style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 18)),
               const Spacer(),
-              Text(reais(pedido['total']), style: const TextStyle(fontWeight: FontWeight.w800, color: Cores.laranja)),
+              Text(reais(pedido['total']), style: TextStyle(fontWeight: FontWeight.w800, color: Cores.laranja)),
             ],
           ),
           if (texto(pedido['clienteNome']).isNotEmpty)
@@ -235,7 +235,7 @@ class _PedidosLojaState extends ConsumerState<PedidosLoja> {
             ),
           if (nomes.isNotEmpty) Text(nomes.join(', '), style: const TextStyle(fontSize: 13)),
           if (pagarNaLoja)
-            const Padding(
+            Padding(
               padding: EdgeInsets.only(top: 6),
               child: Text('Pagamento na loja ainda pendente.', style: TextStyle(color: Cores.laranjaEscuro, fontWeight: FontWeight.w700)),
             ),

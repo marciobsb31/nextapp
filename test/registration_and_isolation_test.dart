@@ -788,7 +788,7 @@ void main() {
     );
 
     testWidgets(
-      '18. Validações de Login: Bloqueio para campos vazios e senha curta',
+      '18. Validações de Login: erro embaixo do campo, sem barrar o tamanho da senha',
       (tester) async {
         GoogleFonts.config.allowRuntimeFetching = false;
         final authController = AuthController();
@@ -806,44 +806,32 @@ void main() {
 
         final btnEntrar = find.byType(GradientButton);
         await tester.ensureVisible(btnEntrar);
-
-        // Limpa os campos
         final textFields = find.byType(TextField);
-        await tester.enterText(textFields.first, '');
-        await tester.enterText(textFields.last, '');
-        await tester.pump();
 
-        // Tenta submeter sem e-mail
+        // Os exemplos dos campos não parecem dados já preenchidos.
+        expect(find.text('cliente@nextpdv.com.br'), findsNothing);
+
+        // Sem e-mail e sem senha: cada campo mostra o seu erro.
         await tester.tap(btnEntrar);
         await tester.pump();
-        expect(
-          find.text('Por favor, informe seu e-mail ou condomínio.'),
-          findsOneWidget,
-        );
+        expect(find.text('Informe seu e-mail.'), findsOneWidget);
+        expect(find.text('Informe sua senha.'), findsOneWidget);
         expect(loginSucesso, isFalse);
 
         // E-mail inválido
         await tester.enterText(textFields.first, 'emailinvalido');
-        await tester.tap(btnEntrar);
-        await tester.pump();
-        expect(
-          find.text(
-            'Informe um e-mail válido (ex: morador@condominio.com.br).',
-          ),
-          findsOneWidget,
-        );
-        expect(loginSucesso, isFalse);
-
-        // Senha curta (< 6 caracteres)
-        await tester.enterText(textFields.first, 'marcio@bellavista.com.br');
         await tester.enterText(textFields.last, '123');
         await tester.tap(btnEntrar);
         await tester.pump();
-        expect(
-          find.text('A senha de acesso deve ter no mínimo 6 caracteres.'),
-          findsOneWidget,
-        );
+        expect(find.text('Confira o e-mail (ex.: nome@email.com).'), findsOneWidget);
+        // A regra da senha é do servidor: senha curta não é barrada na tela.
+        expect(find.textContaining('mínimo'), findsNothing);
         expect(loginSucesso, isFalse);
+
+        // Ao corrigir o e-mail, o erro some.
+        await tester.enterText(textFields.first, 'marcio@bellavista.com.br');
+        await tester.pump();
+        expect(find.text('Confira o e-mail (ex.: nome@email.com).'), findsNothing);
       },
     );
 
@@ -863,12 +851,12 @@ void main() {
         );
         await tester.pump();
 
-        // Toca em 'Esqueceu a senha?'
-        await tester.tap(find.text('Esqueceu a senha?'));
+        await tester.ensureVisible(find.text('Esqueci a senha'));
+        await tester.tap(find.text('Esqueci a senha'));
         await tester.pumpAndSettle();
 
-        expect(find.text('Recuperação de Senha'), findsOneWidget);
-        expect(find.text('Enviar Link de Recuperação'), findsOneWidget);
+        expect(find.text('Recuperar senha'), findsOneWidget);
+        expect(find.text('Enviar link'), findsOneWidget);
       },
     );
   });

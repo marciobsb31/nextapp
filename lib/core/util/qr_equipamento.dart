@@ -1,6 +1,7 @@
 /// O que um QR lido pelo app identifica.
 ///
-/// * Geladeira autônoma (QR colado na geladeira): `http(s)://<servidor>/geladeira/<contrato>/<id>`.
+/// * Geladeira autônoma (QR colado na geladeira): `http(s)://<servidor>/geladeira/<contrato>/<id>`,
+///   ou o link que a página dela abre no celular: `nextpdv://geladeira/<contrato>/<id>`.
 /// * Aparelho do Smart Access (QR impresso pelo painel): `pdvmarket:smart-access:<contrato>:<id>`,
 ///   ou os formatos antigos `QR-<id>` e `<id>`.
 class QrEquipamento {
@@ -10,7 +11,7 @@ class QrEquipamento {
   final String? contrato;
   final int id;
 
-  static final _url = RegExp(r'^https?://[^/\s]+/geladeira/([a-z][a-z0-9_]{0,62})/(\d{1,18})/?$');
+  static final _url = RegExp(r'^(?:https?://[^/\s]+/|nextpdv://)geladeira/([a-z][a-z0-9_]{0,62})/(\d{1,18})/?$');
   static final _painel = RegExp(r'^pdvmarket:smart-access:([a-z][a-z0-9_]{0,62}):(\d{1,18})$');
 
   /// `null` quando o texto não é de nenhum equipamento conhecido.

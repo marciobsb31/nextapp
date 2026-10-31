@@ -7,9 +7,12 @@ import 'controllers/auth_controller.dart';
 import 'core/rede/api.dart';
 import 'core/rede/falha_api.dart';
 import 'core/sessao/acesso_lembrado.dart';
+import 'core/util/link_entrada.dart';
+import 'features/admin/painel_admin.dart';
 import 'theme/app_theme.dart';
 import 'theme/tema_loja.dart';
 import 'views/auth/login_page.dart';
+import 'views/geladeira/geladeira_page.dart';
 import 'views/main_navigation_shell.dart';
 import 'widgets/logo_animada.dart';
 
@@ -31,10 +34,37 @@ class _NextPdvAppState extends State<NextPdvApp> {
   final AcessoLembrado _acesso = AcessoLembrado();
   bool _restaurando = true;
 
+  /// Administrador ou operador que tocou em "Usar como cliente" para comprar no app.
+  bool _modoCliente = false;
+
+  final _navegador = GlobalKey<NavigatorState>();
+
   @override
   void initState() {
     super.initState();
     _restaurarSessao();
+    LinkEntrada.instancia.addListener(_abrirGeladeiraPendente);
+    _authController.addListener(_abrirGeladeiraPendente);
+    LinkEntrada.instancia.iniciar();
+  }
+
+  /// QR da geladeira lido pela câmera do celular: com a pessoa dentro, abre a compra dela.
+  void _abrirGeladeiraPendente() {
+    final sessao = _authController.sessaoAtual;
+    if (!_authController.isAuthenticated || sessao == null || !sessao.cliente) return;
+    final geladeira = LinkEntrada.instancia.consumir();
+    if (geladeira == null) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final navegador = _navegador.currentState;
+      if (navegador == null) return;
+      if (geladeira.contrato != null && geladeira.contrato != sessao.tenantId) {
+        ScaffoldMessenger.maybeOf(navegador.context)?.showSnackBar(const SnackBar(
+          content: Text('Esta geladeira é de outro condomínio. Entre com a conta de lá para comprar nela.'),
+        ));
+        return;
+      }
+      navegador.push(MaterialPageRoute<void>(builder: (_) => GeladeiraPage(sessao: sessao, geladeiraId: geladeira.id)));
+    });
   }
 
   /// "Lembrar de mim": entra direto com a sessão guardada, depois de a API
@@ -53,8 +83,16 @@ class _NextPdvAppState extends State<NextPdvApp> {
     }
   }
 
+  void _sair() {
+    _acesso.esquecerSessao();
+    _modoCliente = false;
+    _authController.logout();
+  }
+
   @override
   void dispose() {
+    LinkEntrada.instancia.removeListener(_abrirGeladeiraPendente);
+    _authController.removeListener(_abrirGeladeiraPendente);
     _authController.dispose();
     super.dispose();
   }
@@ -66,6 +104,7 @@ class _NextPdvAppState extends State<NextPdvApp> {
       animation: Listenable.merge([_authController, TemaLoja.instancia]),
       builder: (context, _) {
         return MaterialApp(
+          navigatorKey: _navegador,
           title: 'Next PDV - Mercado Autônomo & Smart Access',
           debugShowCheckedModeBanner: false,
           theme: AppTheme.lightTheme,
@@ -101,12 +140,15 @@ class _NextPdvAppState extends State<NextPdvApp> {
                   acesso: _acesso,
                   onLoginSuccess: () => setState(() {}),
                 )
+              : _authController.sessaoAtual?.operacao == true && !_modoCliente
+              ? PainelAdmin(
+                  sessao: _authController.sessaoAtual!,
+                  aoUsarComoCliente: () => setState(() => _modoCliente = true),
+                  aoSair: _sair,
+                )
               : MainNavigationShell(
                   authController: _authController,
-                  onLogout: () {
-                    _acesso.esquecerSessao();
-                    _authController.logout();
-                  },
+                  onLogout: _sair,
                 ),
         );
       },

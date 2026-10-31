@@ -21,7 +21,8 @@ void main() {
     await tester.pump(const Duration(milliseconds: 500));
     await tester.pump(const Duration(milliseconds: 500));
     expect(find.byType(NextPdvApp), findsOneWidget);
-    expect(find.text('Acessar Conta'), findsOneWidget);
+    expect(find.text('Continuar com Google'), findsOneWidget);
+    expect(find.text('Criar conta'), findsOneWidget);
   });
 }
 
