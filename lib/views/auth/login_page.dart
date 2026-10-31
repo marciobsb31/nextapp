@@ -108,14 +108,20 @@ class _LoginPageState extends State<LoginPage> {
     if (email.isEmpty) return;
     setState(() => _reenviando = true);
     try {
-      await ApiPdv.padrao().reenviarAviso(email);
+      final enviado = await ApiPdv.padrao().reenviarAviso(email);
       if (!mounted) return;
+      if (!enviado) {
+        // O servidor recebeu o pedido, mas o e-mail não saiu: avisa em vez de prometer que chega.
+        setState(() => _errorMessage =
+            'O e-mail de confirmação não saiu agora. Avise a administração do condomínio para conferir o envio de e-mails.');
+        return;
+      }
       setState(() {
         _podeReenviar = false;
         _errorMessage = null;
       });
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('Se o cadastro existir, o link de confirmação chega em $email em instantes.'),
+        content: Text('Link de confirmação enviado para $email. Confira também a caixa de spam.'),
         behavior: SnackBarBehavior.floating,
       ));
     } catch (erro) {
